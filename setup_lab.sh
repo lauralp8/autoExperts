@@ -30,17 +30,20 @@ echo "Distribución detectada: $OS $VERSION"
 echo ""
 
 # =====================================================
-# 1. ACTUALIZAR SISTEMA (OPCIONAL)
+# 1. VERIFICAR HERRAMIENTAS BÁSICAS
 # =====================================================
-echo "[1/6] Actualizando sistema (opcional)..."
-if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
-    sudo apt-get update -qq 2>/dev/null || echo "⚠ No se pudo actualizar repositorios (continuando...)"
-    sudo apt-get install -y wget curl gnupg2 software-properties-common 2>/dev/null || true
-elif [ "$OS" = "rhel" ] || [ "$OS" = "centos" ] || [ "$OS" = "rocky" ]; then
-    sudo yum update -y -q 2>/dev/null || echo "⚠ No se pudo actualizar sistema (continuando...)"
-    sudo yum install -y wget curl 2>/dev/null || echo "⚠ wget/curl puede que ya estén instalados"
+echo "[1/6] Verificando herramientas básicas..."
+# Verificar que existen wget y curl (usualmente ya instalados en labs)
+if ! command -v wget &> /dev/null || ! command -v curl &> /dev/null; then
+    echo "⚠ Instalando wget/curl..."
+    if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
+        timeout 30 sudo apt-get update -qq 2>/dev/null || true
+        timeout 30 sudo apt-get install -y wget curl -qq 2>/dev/null || true
+    elif [ "$OS" = "rhel" ] || [ "$OS" = "centos" ] || [ "$OS" = "rocky" ]; then
+        timeout 30 sudo yum install -y wget curl -q 2>/dev/null || true
+    fi
 fi
-echo "✓ Paso de actualización completado"
+echo "✓ Herramientas básicas verificadas"
 
 # =====================================================
 # 2. INSTALAR PYTHON 3
