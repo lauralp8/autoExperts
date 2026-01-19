@@ -1,0 +1,66 @@
+# .gitignore para SnapMirror Monitor
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Configuración con datos sensibles
+config/ontap_instances.csv
+config/ontap_instances_real.csv
+config/.env
+*.secret
+
+# Base de datos
+*.db
+*.sqlite
+*.sql.backup
+
+# Grafana provisioning
+grafana/provisioning/
+
+# Temporales
+*.tmp
+*.bak
+*.backup
+temp/
+tmp/
+
+# OS
+Thumbs.db
+desktop.ini

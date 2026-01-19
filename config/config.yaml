@@ -1,0 +1,34 @@
+# Configuración del Proyecto SnapMirror Monitor
+
+# Base de Datos MySQL
+database:
+  host: localhost
+  port: 3306
+  user: snapmirror_user
+  password: change_me_in_production
+  database: snapmirror_monitoring
+  
+# Configuración de Recolección
+collector:
+  mode: mock  # mock o real
+  interval_seconds: 300  # 5 minutos
+  stagger_delay_seconds: 0.2  # Delay entre instancias (200ms * 1400 = ~5min total)
+  timeout_seconds: 30
+  max_concurrent: 50  # Requests concurrentes máximas
+  
+# Umbrales de Alerta (en segundos)
+thresholds:
+  warning: 900   # 15 minutos
+  critical: 3600 # 1 hora
+  
+# Simulación (modo mock)
+mock:
+  num_instances: 100
+  num_relationships_per_instance: 3
+  simulate_lag_probability: 0.3  # 30% tendrán lag
+  simulate_error_probability: 0.05  # 5% con errores
+  
+# Logging
+logging:
+  level: INFO
+  file: logs/collector.log
