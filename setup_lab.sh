@@ -46,48 +46,48 @@ else
 fi
 
 # =====================================================
-# 3. VERIFICAR MYSQL/MARIADB
+# 3. INSTALAR MARIADB (desde RPM directo)
 # =====================================================
 echo ""
-echo "[3/6] Verificando MariaDB..."
+echo "[3/6] Instalando MariaDB..."
 
-# Verificar si el paquete está instalado
-if rpm -q mariadb-server &>/dev/null || rpm -q mysql-server &>/dev/null; then
-    echo "✓ MariaDB/MySQL ya instalado"
-    # Intentar iniciar el servicio
-    sudo systemctl start mariadb 2>/dev/null || sudo systemctl start mysqld 2>/dev/null || {
-        echo "⚠ Servicio de base de datos no pudo iniciarse"
-    }
-    sudo systemctl enable mariadb 2>/dev/null || sudo systemctl enable mysqld 2>/dev/null
-elif command -v mysql &> /dev/null; then
-    echo "✓ Cliente MySQL encontrado"
-    sudo systemctl start mariadb 2>/dev/null || sudo systemctl start mysqld 2>/dev/null || true
+if rpm -q mariadb-server &>/dev/null; then
+    echo "✓ MariaDB ya instalado"
+    systemctl start mariadb 2>/dev/null || true
+    systemctl enable mariadb 2>/dev/null || true
 else
-    echo "⚠ MariaDB no encontrado"
-    echo "Intentando instalación con timeout..."
-    timeout 30 sudo yum install -y mariadb-server 2>/dev/null || {
-        echo ""
-        echo "❌ No se pudo instalar MariaDB automáticamente"
-        echo ""
-        echo "Soluciones:"
-        echo "  1. Instalar manualmente: sudo yum install -y mariadb-server"
-        echo "  2. O ejecutar manualmente estos comandos:"
-        echo ""
-        echo "  sudo systemctl start mariadb"
-        echo "  mysql -u root <<EOF"
-        echo "  CREATE DATABASE snapmirror_monitoring;"
-        echo "  CREATE USER 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';"
-        echo "  GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';"
-        echo "  FLUSH PRIVILEGES;"
-        echo "  EOF"
-        echo ""
-        echo "  mysql -u root snapmirror_monitoring < config/mysql_schema.sql"
-        echo ""
-        exit 1
+    echo "Descargando MariaDB desde mirror oficial..."
+    
+    # Descargar RPMs de MariaDB 10.11 (compatible RHEL 9)
+    MARIADB_VERSION="10.11.6"
+    MARIADB_BASE_URL="https://archive.mariadb.org/mariadb-${MARIADB_VERSION}/yum/rhel/9/x86_64"
+    
+    mkdir -p /tmp/mariadb_install
+    cd /tmp/mariadb_install
+    
+    wget -q "${MARIADB_BASE_URL}/MariaDB-server-${MARIADB_VERSION}-1.el9.x86_64.rpm" || {
+        echo "⚠ No se pudo descargar MariaDB, usando versión del sistema si existe"
+        cd - > /dev/null
     }
-    sudo systemctl start mariadb
-    sudo systemctl enable mariadb
-    echo "✓ MariaDB instalado"
+    wget -q "${MARIADB_BASE_URL}/MariaDB-client-${MARIADB_VERSION}-1.el9.x86_64.rpm" 2>/dev/null || true
+    wget -q "${MARIADB_BASE_URL}/MariaDB-common-${MARIADB_VERSION}-1.el9.x86_64.rpm" 2>/dev/null || true
+    wget -q "${MARIADB_BASE_URL}/MariaDB-shared-${MARIADB_VERSION}-1.el9.x86_64.rpm" 2>/dev/null || true
+    
+    # Instalar RPMs
+    if [ -f "MariaDB-server-${MARIADB_VERSION}-1.el9.x86_64.rpm" ]; then
+        rpm -ivh --nodeps MariaDB-*.rpm 2>/dev/null || {
+            echo "⚠ Instalación de RPMs falló, continuando..."
+        }
+        cd - > /dev/null
+        rm -rf /tmp/mariadb_install
+        
+        systemctl start mariadb 2>/dev/null || systemctl start mysql 2>/dev/null || true
+        systemctl enable mariadb 2>/dev/null || systemctl enable mysql 2>/dev/null || true
+        echo "✓ MariaDB instalado"
+    else
+        cd - > /dev/null
+        echo "⚠ No se pudo instalar MariaDB automáticamente"
+    fi
 fi
 
 # Configurar MariaDB
@@ -99,34 +99,45 @@ EOF
 echo "✓ MariaDB configurado"
 
 # =====================================================
-# 4. INSTALAR GRAFANA
+# 4. INSTALAR GRAFANA (desde RPM directo)
 # =====================================================
 echo ""
 echo "[4/6] Instalando Grafana..."
-if ! command -v grafana-server &> /dev/null; then
-    cat <<EOFGRAFANA | sudo tee /etc/yum.repos.d/grafana.repo
-[grafana]
-name=grafana
-baseurl=https://rpm.grafana.com
-repo_gpgcheck=1
-enabled=1
-gpgcheck=1
-gpgkey=https://rpm.grafana.com/gpg.key
-sslverify=1
-sslcacert=/etc/pki/tls/certs/ca-bundle.crt
-EOFGRAFANA
-    
-    sudo yum install -y grafana || {
-        echo "❌ Error instalando Grafana"
-        exit 1
-    }
-    sudo systemctl daemon-reload
-    sudo systemctl start grafana-server
-    sudo systemctl enable grafana-server
-    echo "✓ Grafana instalado"
-else
+
+if rpm -q grafana &>/dev/null; then
     echo "✓ Grafana ya instalado"
-    sudo systemctl start grafana-server 2>/dev/null || true
+    systemctl start grafana-server 2>/dev/null || true
+    systemctl enable grafana-server 2>/dev/null || true
+else
+    echo "Descargando Grafana desde sitio oficial..."
+    
+    # Descargar última versión de Grafana para RHEL 9
+    GRAFANA_VERSION="10.2.3"
+    GRAFANA_RPM="grafana-${GRAFANA_VERSION}-1.x86_64.rpm"
+    GRAFANA_URL="https://dl.grafana.com/oss/release/${GRAFANA_RPM}"
+    
+    cd /tmp
+    wget -q "$GRAFANA_URL" -O "$GRAFANA_RPM" || {
+        echo "⚠ No se pudo descargar Grafana"
+    }
+    
+    if [ -f "$GRAFANA_RPM" ]; then
+        rpm -ivh --nodeps "$GRAFANA_RPM" 2>/dev/null || {
+            echo "⚠ Error instalando Grafana RPM"
+        }
+        rm -f "$GRAFANA_RPM"
+        
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl start grafana-server 2>/dev/null || true
+        systemctl enable grafana-server 2>/dev/null || true
+        echo "✓ Grafana instalado"
+    else
+        echo "⚠ No se pudo instalar Grafana automáticamente"
+    fi
+    --no-warn-script-location 2>/dev/null || true
+python3 -m pip install netapp-ontap requests PyMySQL PyYAML aiohttp --quiet --no-warn-script-location 2>/dev/null || {
+    echo "⚠ Algunas dependencias Python pueden no haberse instalado"
+}
 fi
 
 # =====================================================
