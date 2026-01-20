@@ -1,0 +1,49 @@
+# Pre-check para entorno de cliente NetApp SnapMirror Monitor
+# Ejecuta cada bloque y verifica que todo responde OK
+
+# 1. Verificar Python
+python3 --version
+which python3
+
+# 2. Verificar MySQL
+mysql --version
+systemctl status mysqld || systemctl status mysql
+
+# 3. Verificar Grafana
+grafana-server -v
+systemctl status grafana-server
+
+# 4. Verificar conectividad a ONTAP
+ping <ip_cluster_ontap>
+curl -k https://<ip_cluster_ontap>/api/cluster
+
+# 5. Verificar permisos de usuario
+whoami
+pwd
+ls -l
+
+# 6. Verificar espacio en disco
+df -h .
+
+# 7. Verificar acceso a red (salida a internet para clonar repo)
+curl https://github.com
+
+# 8. Verificar puertos locales
+ss -tuln | grep 3306   # MySQL
+ss -tuln | grep 3000   # Grafana
+
+# 9. Verificar dependencias Python (opcional, solo si ya hay venv)
+pip3 list | grep -E 'aiohttp|PyMySQL|PyYAML|requests'
+
+# 10. Verificar que puedes clonar el proyecto
+git --version
+git clone <url-del-repo> corme
+ls corme
+
+# 11. Verificar que puedes editar archivos
+touch test.txt
+echo "prueba" > test.txt
+cat test.txt
+rm test.txt
+
+# Si todo responde OK, puedes lanzar el proyecto sin problemas.
