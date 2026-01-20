@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS snapmirror_status_current (
     INDEX idx_collected (collected_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Tabla histórica (opcional, para tendencias)
+-- Tabla histórica (sin particiones para compatibilidad con MySQL 8.0 + foreign keys)
 CREATE TABLE IF NOT EXISTS snapmirror_status_history (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     relationship_id INT NOT NULL,
@@ -71,10 +71,7 @@ CREATE TABLE IF NOT EXISTS snapmirror_status_history (
     INDEX idx_relationship_time (relationship_id, collected_at),
     INDEX idx_instance_time (instance_id, collected_at),
     INDEX idx_collected (collected_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 PARTITION BY RANGE (TO_DAYS(collected_at)) (
-    PARTITION p_history VALUES LESS THAN (TO_DAYS('2026-02-01')),
-    PARTITION p_future VALUES LESS THAN MAXVALUE
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Vista para Grafana: Mapa con alertas
 CREATE OR REPLACE VIEW v_snapmirror_map AS

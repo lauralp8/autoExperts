@@ -111,12 +111,24 @@ EOF
 fi
 
 # Configurar MySQL/MariaDB
-echo "  ⚙ Configurando MySQL..."
+echo "  ⚙ Configurando base de datos y usuario..."
+
+# Esperar a que MySQL esté listo
+sleep 3
+
+# Crear base de datos y usuario
 /usr/bin/mysql -u root -pNetApp123! <<EOF 2>/dev/null || /usr/bin/mysql -u root <<EOF 2>/dev/null
-ALTER USER 'root'@'localhost' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD';
+CREATE DATABASE IF NOT EXISTS snapmirror_monitoring;
+CREATE USER IF NOT EXISTS 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';
+GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';
 FLUSH PRIVILEGES;
 EOF
-echo "✓ MariaDB configurado"
+
+if [ $? -eq 0 ]; then
+    echo "✓ Base de datos y usuario creados"
+else
+    echo "⚠ Error creando base de datos"
+fi
 
 # =====================================================
 # 4. INSTALAR GRAFANA (desde RPM directo)
@@ -154,10 +166,8 @@ else
     else
         echo "⚠ No se pudo instalar Grafana automáticamente"
     fi
-    --no-warn-script-location 2>/dev/null || true
-python3 -m pip install netapp-ontap requests PyMySQL PyYAML aiohttp --quiet --no-warn-script-location 2>/dev/null || {
-    echo "⚠ Algunas dependencias Python pueden no haberse instalado"
-}
+    
+    cd - > /dev/null
 fi
 
 # =====================================================
@@ -165,7 +175,7 @@ fi
 # =====================================================
 echo ""
 echo "[5/6] Instalando dependencias Python..."
-python3 -m pip install --upgrade pip --quiet 2>/dev/null || true
+python3 -m pip install --upgrade pip --quiet --no-warn-script-location 2>/dev/null || true
 python3 -m pip install netapp-ontap requests PyMySQL PyYAML aiohttp --quiet 2>/dev/null || true
 echo "✓ Dependencias Python instaladas"
 
@@ -175,25 +185,33 @@ echo "✓ Dependencias Python instaladas"
 echo ""
 echo "[6/6] Inicializando base de datos..."
 
-mysql -u root -p"$MYSQL_ROOT_PASSWORD" <<EOF 2>/dev/null
-CREATE DATABASE IF NOT EXISTS $MYSQL_DATABASE;
-CREATE USER IF NOT EXISTS '$MYSQL_APP_USER'@'localhost' IDENTIFIED BY '$MYSQL_APP_PASSWORD';
-GRANT ALL PRIVILEGES ON ${MYSQL_DATABASE}.* TO '$MYSQL_APP_USER'@'localhost';
-FLUSH PRIVILEGES;
-EOF
-echo "✓ Base de datos creada"
-
+# Cargar el schema SQL
 if [ -f "config/mysql_schema.sql" ]; then
-    mysql -u root -p"$MYSQL_ROOT_PASSWORD" $MYSQL_DATABASE < config/mysql_schema.sql 2>/dev/null
-    echo "✓ Schema MySQL creado"
+    /usr/bin/mysql -u root -pNetApp123! snapmirror_monitoring < config/mysql_schema.sql 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo "✓ Schema MySQL creado"
+    else
+        echo "⚠ Error cargando schema"
+    fi
+else
+    echo "⚠ Archivo mysql_schema.sql no encontrado"
 fi
 
-# Actualizar config.yaml
+# Verificar tablas creadas
+TABLE_COUNT=$(/usr/bin/mysql -u root -pNetApp123! snapmirror_monitoring -e "SHOW TABLES;" 2>/dev/null | wc -l)
+if [ $TABLE_COUNT -gt 1 ]; then
+    echo "✓ Base de datos inicializada con $((TABLE_COUNT - 1)) tablas/vistas"
+else
+    echo "⚠ No se crearon las tablas esperadas"
+fi
+
+# Actualizar config.yaml si es necesario
 if [ -f "config/config.yaml" ]; then
-    sed -i "s/password: change_me_in_production/password: $MYSQL_APP_PASSWORD/" config/config.yaml
+    sed -i "s/password: change_me_in_production/password: SnapMirror123!/" config/config.yaml 2>/dev/null
     echo "✓ Configuración actualizada"
 fi
 
+# Crear directorio de logs
 mkdir -p logs
 
 echo ""
