@@ -65,28 +65,35 @@ else
     mkdir -p /tmp/mariadb_install
     cd /tmp/mariadb_install
     
-    wget -q "${MARIADB_BASE_URL}/MariaDB-server-${MARIADB_VERSION}-1.el9.x86_64.rpm" || {
-        echo "⚠ No se pudo descargar MariaDB, usando versión del sistema si existe"
-        cd - > /dev/null
-    }
-    wget -q "${MARIADB_BASE_URL}/MariaDB-client-${MARIADB_VERSION}-1.el9.x86_64.rpm" 2>/dev/null || true
-    wget -q "${MARIADB_BASE_URL}/MariaDB-common-${MARIADB_VERSION}-1.el9.x86_64.rpm" 2>/dev/null || true
-    wget -q "${MARIADB_BASE_URL}/MariaDB-shared-${MARIADB_VERSION}-1.el9.x86_64.rpm" 2>/dev/null || true
+    echo "  - Descargando MariaDB-common..."
+    wget "${MARIADB_BASE_URL}/MariaDB-common-${MARIADB_VERSION}-1.el9.x86_64.rpm" -O MariaDB-common.rpm
     
-    # Instalar RPMs
-    if [ -f "MariaDB-server-${MARIADB_VERSION}-1.el9.x86_64.rpm" ]; then
-        rpm -ivh --nodeps MariaDB-*.rpm 2>/dev/null || {
-            echo "⚠ Instalación de RPMs falló, continuando..."
-        }
+    echo "  - Descargando MariaDB-client..."
+    wget "${MARIADB_BASE_URL}/MariaDB-client-${MARIADB_VERSION}-1.el9.x86_64.rpm" -O MariaDB-client.rpm
+    
+    echo "  - Descargando MariaDB-shared..."
+    wget "${MARIADB_BASE_URL}/MariaDB-shared-${MARIADB_VERSION}-1.el9.x86_64.rpm" -O MariaDB-shared.rpm
+    
+    echo "  - Descargando MariaDB-server..."
+    wget "${MARIADB_BASE_URL}/MariaDB-server-${MARIADB_VERSION}-1.el9.x86_64.rpm" -O MariaDB-server.rpm
+    
+    # Instalar RPMs en orden correcto
+    if [ -f "MariaDB-common.rpm" ]; then
+        echo "  - Instalando MariaDB..."
+        rpm -ivh --nodeps MariaDB-common.rpm MariaDB-shared.rpm MariaDB-client.rpm MariaDB-server.rpm
+        
         cd - > /dev/null
         rm -rf /tmp/mariadb_install
         
-        systemctl start mariadb 2>/dev/null || systemctl start mysql 2>/dev/null || true
-        systemctl enable mariadb 2>/dev/null || systemctl enable mysql 2>/dev/null || true
-        echo "✓ MariaDB instalado"
+        systemctl daemon-reload
+        systemctl start mariadb
+        systemctl enable mariadb
+        echo "✓ MariaDB instalado y arrancado"
     else
         cd - > /dev/null
-        echo "⚠ No se pudo instalar MariaDB automáticamente"
+        rm -rf /tmp/mariadb_install
+        echo "❌ Error descargando MariaDB"
+        exit 1
     fi
 fi
 
