@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: snapmirror_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: NetApp123!
+      MYSQL_DATABASE: snapmirror_monitoring
+      MYSQL_USER: snapmirror_user
+      MYSQL_PASSWORD: SnapMirror123!
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./config/mysql_schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    networks:
+      - snapmirror_net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pNetApp123!"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Grafana Dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: snapmirror_grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana:/etc/grafana/provisioning/dashboards:ro
+      - ./config/grafana-datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml:ro
+    networks:
+      - snapmirror_net
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  snapmirror_net:
+    driver: bridge
