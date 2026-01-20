@@ -103,21 +103,8 @@ class ONTAPClient:
             Lista de diccionarios con información de cada relación
         """
         try:
-            # Campos específicos que necesitamos
-            fields = [
-                'uuid',
-                'source.path',
-                'destination.path',
-                'policy.name',
-                'state',
-                'healthy',
-                'transfer.state',
-                'lag_time',  # Lag en formato ISO duration
-                'last_transfer_end_time'
-            ]
-            
+            # Query básica sin campos específicos (más compatible)
             params = {
-                'fields': ','.join(fields),
                 'return_records': 'true',
                 'return_timeout': 15
             }
@@ -127,16 +114,23 @@ class ONTAPClient:
             relationships = []
             for record in data.get('records', []):
                 # Parsear lag_time (viene en formato ISO 8601 duration: PT1H30M)
-                lag_seconds = self._parse_iso_duration(record.get('lag_time', 'PT0S'))
+                lag_time_str = record.get('lag_time', 'PT0S')
+                lag_seconds = self._parse_iso_duration(lag_time_str) if lag_time_str else 0
+                
+                # Extraer datos con manejo robusto de campos opcionales
+                source_info = record.get('source', {})
+                dest_info = record.get('destination', {})
+                policy_info = record.get('policy', {})
+                transfer_info = record.get('transfer', {})
                 
                 rel_info = {
                     'uuid': record.get('uuid'),
-                    'source_path': record.get('source', {}).get('path'),
-                    'destination_path': record.get('destination', {}).get('path'),
-                    'policy': record.get('policy', {}).get('name'),
+                    'source_path': source_info.get('path') if source_info else None,
+                    'destination_path': dest_info.get('path') if dest_info else None,
+                    'policy': policy_info.get('name') if policy_info else None,
                     'state': record.get('state'),
                     'healthy': record.get('healthy'),
-                    'transfer_state': record.get('transfer', {}).get('state'),
+                    'transfer_state': transfer_info.get('state') if transfer_info else None,
                     'lag_seconds': lag_seconds,
                     'last_transfer_end_time': record.get('last_transfer_end_time')
                 }
