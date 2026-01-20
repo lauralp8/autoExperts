@@ -182,8 +182,8 @@ fi
 # =====================================================
 echo ""
 echo "[5/6] Instalando dependencias Python..."
-python3 -m pip install --upgrade pip --quiet --no-warn-script-location 2>/dev/null || true
-python3 -m pip install netapp-ontap requests PyMySQL PyYAML aiohttp --quiet 2>/dev/null || true
+python3.12 -m pip install --upgrade pip --quiet --no-warn-script-location 2>/dev/null || true
+python3.12 -m pip install netapp-ontap requests PyMySQL PyYAML aiohttp --quiet --no-warn-script-location 2>/dev/null || true
 echo "✓ Dependencias Python instaladas"
 
 # =====================================================
@@ -235,7 +235,7 @@ echo "  MariaDB: root / $MYSQL_ROOT_PASSWORD"
 echo "  Grafana: admin / admin"
 echo ""
 echo "Próximos pasos:"
-echo "  python3 generate_mock_csv.py --num-instances 50"
-echo "  python3 run_collector.py --mode mock --once"
+echo "  python3.12 generate_mock_csv.py --num-instances 50"
+echo "  python3.12 run_collector.py --mode mock --once"
 echo ""
 echo "¡Listo! 🚀"
