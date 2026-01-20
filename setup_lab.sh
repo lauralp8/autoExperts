@@ -46,21 +46,48 @@ else
 fi
 
 # =====================================================
-# 3. INSTALAR MYSQL/MARIADB
+# 3. VERIFICAR MYSQL/MARIADB
 # =====================================================
 echo ""
-echo "[3/6] Instalando MariaDB..."
-if ! command -v mysql &> /dev/null; then
-    sudo yum install -y mariadb-server 2>/dev/null || {
-        echo "❌ Error instalando MariaDB"
+echo "[3/6] Verificando MariaDB..."
+
+# Verificar si el paquete está instalado
+if rpm -q mariadb-server &>/dev/null || rpm -q mysql-server &>/dev/null; then
+    echo "✓ MariaDB/MySQL ya instalado"
+    # Intentar iniciar el servicio
+    sudo systemctl start mariadb 2>/dev/null || sudo systemctl start mysqld 2>/dev/null || {
+        echo "⚠ Servicio de base de datos no pudo iniciarse"
+    }
+    sudo systemctl enable mariadb 2>/dev/null || sudo systemctl enable mysqld 2>/dev/null
+elif command -v mysql &> /dev/null; then
+    echo "✓ Cliente MySQL encontrado"
+    sudo systemctl start mariadb 2>/dev/null || sudo systemctl start mysqld 2>/dev/null || true
+else
+    echo "⚠ MariaDB no encontrado"
+    echo "Intentando instalación con timeout..."
+    timeout 30 sudo yum install -y mariadb-server 2>/dev/null || {
+        echo ""
+        echo "❌ No se pudo instalar MariaDB automáticamente"
+        echo ""
+        echo "Soluciones:"
+        echo "  1. Instalar manualmente: sudo yum install -y mariadb-server"
+        echo "  2. O ejecutar manualmente estos comandos:"
+        echo ""
+        echo "  sudo systemctl start mariadb"
+        echo "  mysql -u root <<EOF"
+        echo "  CREATE DATABASE snapmirror_monitoring;"
+        echo "  CREATE USER 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';"
+        echo "  GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';"
+        echo "  FLUSH PRIVILEGES;"
+        echo "  EOF"
+        echo ""
+        echo "  mysql -u root snapmirror_monitoring < config/mysql_schema.sql"
+        echo ""
         exit 1
     }
     sudo systemctl start mariadb
     sudo systemctl enable mariadb
     echo "✓ MariaDB instalado"
-else
-    echo "✓ MariaDB ya instalado"
-    sudo systemctl start mariadb 2>/dev/null || true
 fi
 
 # Configurar MariaDB
