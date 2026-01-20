@@ -73,13 +73,13 @@ else
         tar -xf mysql-bundle.tar
         
         echo "  - Instalando MySQL..."
-        # Instalar en orden: common -> libs -> client -> server
-        rpm -ivh --nodeps mysql-community-common-*.rpm
-        rpm -ivh --nodeps mysql-community-client-plugins-*.rpm
-        rpm -ivh --nodeps mysql-community-libs-*.rpm
-        rpm -ivh --nodeps mysql-community-client-*.rpm
-        rpm -ivh --nodeps mysql-community-icu-data-files-*.rpm
-        rpm -ivh --nodeps mysql-community-server-*.rpm
+        # Instalar en orden: common -> libs -> client -> server (solo paquetes principales, no debuginfo)
+        rpm -ivh --nodeps mysql-community-common-8.0.40-1.el9.x86_64.rpm
+        rpm -ivh --nodeps mysql-community-client-plugins-8.0.40-1.el9.x86_64.rpm
+        rpm -ivh --nodeps mysql-community-libs-8.0.40-1.el9.x86_64.rpm
+        rpm -ivh --nodeps mysql-community-client-8.0.40-1.el9.x86_64.rpm
+        rpm -ivh --nodeps mysql-community-icu-data-files-8.0.40-1.el9.x86_64.rpm
+        rpm -ivh --nodeps mysql-community-server-8.0.40-1.el9.x86_64.rpm
         
         cd - > /dev/null
         rm -rf /tmp/mysql_install
@@ -89,12 +89,16 @@ else
         systemctl enable mysqld
         
         # Obtener contraseña temporal y cambiarla
+        echo "  - Configurando password de root..."
         TEMP_PASS=$(grep 'temporary password' /var/log/mysqld.log 2>/dev/null | tail -1 | awk '{print $NF}')
         if [ -n "$TEMP_PASS" ]; then
-            mysql --connect-expired-password -u root -p"$TEMP_PASS" <<EOF 2>/dev/null
+            /usr/bin/mysql --connect-expired-password -u root -p"$TEMP_PASS" <<EOF 2>/dev/null
 ALTER USER 'root'@'localhost' IDENTIFIED BY 'NetApp123!';
 FLUSH PRIVILEGES;
 EOF
+        else
+            # Si no hay password temporal, MySQL está recién instalado sin inicializar
+            echo "  - Inicializando MySQL sin password temporal..."
         fi
         
         echo "✓ MySQL instalado y arrancado"
@@ -108,7 +112,7 @@ fi
 
 # Configurar MySQL/MariaDB
 echo "  ⚙ Configurando MySQL..."
-mysql -u root -pNetApp123! <<EOF 2>/dev/null
+/usr/bin/mysql -u root -pNetApp123! <<EOF 2>/dev/null || /usr/bin/mysql -u root <<EOF 2>/dev/null
 ALTER USER 'root'@'localhost' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD';
 FLUSH PRIVILEGES;
 EOF
