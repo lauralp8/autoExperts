@@ -56,50 +56,59 @@ if rpm -q mariadb-server &>/dev/null; then
     systemctl start mariadb 2>/dev/null || true
     systemctl enable mariadb 2>/dev/null || true
 else
-    echo "Descargando MariaDB desde mirror oficial..."
+    echo "Descargando MySQL Community Server desde Oracle..."
     
-    # Descargar RPMs de MariaDB 10.11 (compatible RHEL 9)
-    MARIADB_VERSION="10.11.6"
-    MARIADB_BASE_URL="https://archive.mariadb.org/mariadb-${MARIADB_VERSION}/yum/rhel/9/x86_64"
+    # Descargar MySQL 8.0 para RHEL 9
+    MYSQL_BASE_URL="https://dev.mysql.com/get/Downloads/MySQL-8.0"
+    MYSQL_BUNDLE="mysql-8.0.40-1.el9.x86_64.rpm-bundle.tar"
     
-    mkdir -p /tmp/mariadb_install
-    cd /tmp/mariadb_install
+    mkdir -p /tmp/mysql_install
+    cd /tmp/mysql_install
     
-    echo "  - Descargando MariaDB-common..."
-    wget "${MARIADB_BASE_URL}/MariaDB-common-${MARIADB_VERSION}-1.el9.x86_64.rpm" -O MariaDB-common.rpm
+    echo "  - Descargando MySQL bundle (puede tardar un minuto)..."
+    wget "${MYSQL_BASE_URL}/${MYSQL_BUNDLE}" -O mysql-bundle.tar
     
-    echo "  - Descargando MariaDB-client..."
-    wget "${MARIADB_BASE_URL}/MariaDB-client-${MARIADB_VERSION}-1.el9.x86_64.rpm" -O MariaDB-client.rpm
-    
-    echo "  - Descargando MariaDB-shared..."
-    wget "${MARIADB_BASE_URL}/MariaDB-shared-${MARIADB_VERSION}-1.el9.x86_64.rpm" -O MariaDB-shared.rpm
-    
-    echo "  - Descargando MariaDB-server..."
-    wget "${MARIADB_BASE_URL}/MariaDB-server-${MARIADB_VERSION}-1.el9.x86_64.rpm" -O MariaDB-server.rpm
-    
-    # Instalar RPMs en orden correcto
-    if [ -f "MariaDB-common.rpm" ]; then
-        echo "  - Instalando MariaDB..."
-        rpm -ivh --nodeps MariaDB-common.rpm MariaDB-shared.rpm MariaDB-client.rpm MariaDB-server.rpm
+    if [ -f "mysql-bundle.tar" ]; then
+        echo "  - Extrayendo RPMs..."
+        tar -xf mysql-bundle.tar
+        
+        echo "  - Instalando MySQL..."
+        # Instalar en orden: common -> libs -> client -> server
+        rpm -ivh --nodeps mysql-community-common-*.rpm
+        rpm -ivh --nodeps mysql-community-client-plugins-*.rpm
+        rpm -ivh --nodeps mysql-community-libs-*.rpm
+        rpm -ivh --nodeps mysql-community-client-*.rpm
+        rpm -ivh --nodeps mysql-community-icu-data-files-*.rpm
+        rpm -ivh --nodeps mysql-community-server-*.rpm
         
         cd - > /dev/null
-        rm -rf /tmp/mariadb_install
+        rm -rf /tmp/mysql_install
         
         systemctl daemon-reload
-        systemctl start mariadb
-        systemctl enable mariadb
-        echo "✓ MariaDB instalado y arrancado"
+        systemctl start mysqld
+        systemctl enable mysqld
+        
+        # Obtener contraseña temporal y cambiarla
+        TEMP_PASS=$(grep 'temporary password' /var/log/mysqld.log 2>/dev/null | tail -1 | awk '{print $NF}')
+        if [ -n "$TEMP_PASS" ]; then
+            mysql --connect-expired-password -u root -p"$TEMP_PASS" <<EOF 2>/dev/null
+ALTER USER 'root'@'localhost' IDENTIFIED BY 'NetApp123!';
+FLUSH PRIVILEGES;
+EOF
+        fi
+        
+        echo "✓ MySQL instalado y arrancado"
     else
         cd - > /dev/null
-        rm -rf /tmp/mariadb_install
-        echo "❌ Error descargando MariaDB"
+        rm -rf /tmp/mysql_install
+        echo "❌ Error descargando MySQL"
         exit 1
     fi
 fi
 
-# Configurar MariaDB
-echo "  ⚙ Configurando MariaDB..."
-mysql -u root <<EOF 2>/dev/null
+# Configurar MySQL/MariaDB
+echo "  ⚙ Configurando MySQL..."
+mysql -u root -pNetApp123! <<EOF 2>/dev/null
 ALTER USER 'root'@'localhost' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD';
 FLUSH PRIVILEGES;
 EOF
