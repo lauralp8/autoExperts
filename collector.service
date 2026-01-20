@@ -1,0 +1,13 @@
+[Unit]
+Description=SnapMirror Collector
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/corme
+ExecStart=/usr/bin/python3.12 /root/corme/run_collector.py --mode real
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
