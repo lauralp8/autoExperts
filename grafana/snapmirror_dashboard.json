@@ -397,7 +397,9 @@
               "longitude": "longitude"
             },
             "name": "ONTAP Select Instances",
-            "tooltip": true,
+            "tooltip": {
+              "mode": "details"
+            },
             "type": "markers"
           }
         ],
