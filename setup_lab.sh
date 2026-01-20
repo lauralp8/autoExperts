@@ -58,28 +58,28 @@ if rpm -q mariadb-server &>/dev/null; then
 else
     echo "Descargando MySQL Community Server desde Oracle..."
     
-    # Descargar MySQL 8.0 para RHEL 9
+    # Seleccionar bundle según versión de RHEL
     MYSQL_BASE_URL="https://dev.mysql.com/get/Downloads/MySQL-8.0"
-    MYSQL_BUNDLE="mysql-8.0.40-1.el9.x86_64.rpm-bundle.tar"
+    MYSQL_BUNDLE="mysql-8.0.40-1.el${MYSQL_RHEL_VER}.x86_64.rpm-bundle.tar"
     
     mkdir -p /tmp/mysql_install
     cd /tmp/mysql_install
     
-    echo "  - Descargando MySQL bundle (puede tardar un minuto)..."
+    echo "  - Descargando MySQL bundle para RHEL ${MYSQL_RHEL_VER} (puede tardar un minuto)..."
     wget "${MYSQL_BASE_URL}/${MYSQL_BUNDLE}" -O mysql-bundle.tar
     
     if [ -f "mysql-bundle.tar" ]; then
         echo "  - Extrayendo RPMs..."
         tar -xf mysql-bundle.tar
         
-        echo "  - Instalando MySQL..."
+        echo "  - Instalando MySQL para RHEL ${MYSQL_RHEL_VER}..."
         # Instalar en orden: common -> libs -> client -> server (solo paquetes principales, no debuginfo)
-        rpm -ivh --nodeps mysql-community-common-8.0.40-1.el9.x86_64.rpm
-        rpm -ivh --nodeps mysql-community-client-plugins-8.0.40-1.el9.x86_64.rpm
-        rpm -ivh --nodeps mysql-community-libs-8.0.40-1.el9.x86_64.rpm
-        rpm -ivh --nodeps mysql-community-client-8.0.40-1.el9.x86_64.rpm
-        rpm -ivh --nodeps mysql-community-icu-data-files-8.0.40-1.el9.x86_64.rpm
-        rpm -ivh --nodeps mysql-community-server-8.0.40-1.el9.x86_64.rpm
+        rpm -ivh --nodeps mysql-community-common-8.0.40-1.el${MYSQL_RHEL_VER}.x86_64.rpm
+        rpm -ivh --nodeps mysql-community-client-plugins-8.0.40-1.el${MYSQL_RHEL_VER}.x86_64.rpm
+        rpm -ivh --nodeps mysql-community-libs-8.0.40-1.el${MYSQL_RHEL_VER}.x86_64.rpm
+        rpm -ivh --nodeps mysql-community-client-8.0.40-1.el${MYSQL_RHEL_VER}.x86_64.rpm
+        rpm -ivh --nodeps mysql-community-icu-data-files-8.0.40-1.el${MYSQL_RHEL_VER}.x86_64.rpm
+        rpm -ivh --nodeps mysql-community-server-8.0.40-1.el${MYSQL_RHEL_VER}.x86_64.rpm
         
         cd - > /dev/null
         rm -rf /tmp/mysql_install
