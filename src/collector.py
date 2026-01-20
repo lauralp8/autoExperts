@@ -245,6 +245,17 @@ class SnapMirrorCollector:
                     alert_level = 'ok'
                     error_msg = None
                 
+                # Convertir last_transfer_end_time de ISO 8601 a datetime MySQL
+                last_transfer_time = rel.get('last_transfer_end_time')
+                if last_transfer_time:
+                    try:
+                        # Convertir "2026-01-20T12:00:08+00:00" a datetime sin timezone
+                        dt = datetime.fromisoformat(last_transfer_time.replace('Z', '+00:00'))
+                        last_transfer_time = dt.strftime('%Y-%m-%d %H:%M:%S')
+                    except Exception as e:
+                        logger.warning(f"Error parseando timestamp {last_transfer_time}: {e}")
+                        last_transfer_time = None
+                
                 # Actualizar estado actual
                 self.db.update_current_status(
                     relationship_id=rel_id,
@@ -253,7 +264,7 @@ class SnapMirrorCollector:
                     state=rel['state'],
                     health=healthy,
                     transfer_state=rel['transfer_state'],
-                    last_transfer_time=rel.get('last_transfer_end_time'),
+                    last_transfer_time=last_transfer_time,
                     alert_level=alert_level,
                     error_msg=error_msg
                 )
