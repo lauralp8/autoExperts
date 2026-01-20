@@ -103,8 +103,9 @@ class ONTAPClient:
             Lista de diccionarios con información de cada relación
         """
         try:
-            # Query básica sin campos específicos (más compatible)
+            # Query con campos específicos para obtener lag_time
             params = {
+                'fields': 'uuid,source.path,destination.path,policy.name,state,healthy,lag_time,transfer.state,transfer.end_time',
                 'return_records': 'true',
                 'return_timeout': 15
             }
@@ -132,7 +133,7 @@ class ONTAPClient:
                     'healthy': record.get('healthy'),
                     'transfer_state': transfer_info.get('state') if transfer_info else None,
                     'lag_seconds': lag_seconds,
-                    'last_transfer_end_time': record.get('last_transfer_end_time')
+                    'last_transfer_end_time': transfer_info.get('end_time') if transfer_info else None
                 }
                 relationships.append(rel_info)
             

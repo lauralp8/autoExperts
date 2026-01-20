@@ -596,11 +596,11 @@
           "editorMode": "code",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT \n  instance_name,\n  location_name,\n  source_path,\n  destination_path,\n  policy,\n  state,\n  health_status,\n  lag_minutes,\n  alert_level,\n  collected_at as last_check\nFROM v_snapmirror_detail\nWHERE alert_level IN ('warning', 'critical', 'error')\nORDER BY \n  CASE alert_level\n    WHEN 'critical' THEN 1\n    WHEN 'error' THEN 2\n    WHEN 'warning' THEN 3\n    ELSE 4\n  END,\n  lag_minutes DESC\nLIMIT 100",
+          "rawSql": "SELECT \n  instance_name,\n  location_name,\n  source_path,\n  destination_path,\n  policy,\n  state,\n  health_status,\n  lag_minutes,\n  alert_level,\n  collected_at as last_check\nFROM v_snapmirror_detail\nORDER BY \n  CASE alert_level\n    WHEN 'critical' THEN 1\n    WHEN 'error' THEN 2\n    WHEN 'warning' THEN 3\n    WHEN 'ok' THEN 4\n    ELSE 5\n  END,\n  lag_minutes DESC\nLIMIT 500",
           "refId": "A"
         }
       ],
-      "title": "Active Alerts - SnapMirror Relationships",
+      "title": "All SnapMirror Relationships - Status Overview",
       "type": "table"
     },
     {
@@ -690,11 +690,11 @@
           "editorMode": "code",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT \n  collected_at as time,\n  CONCAT(i.name, ' - ', r.source_path) as metric,\n  h.lag_seconds / 60 as value\nFROM snapmirror_status_history h\nINNER JOIN snapmirror_relationships r ON h.relationship_id = r.id\nINNER JOIN ontap_instances i ON h.instance_id = i.id\nWHERE \n  h.collected_at >= NOW() - INTERVAL 24 HOUR\n  AND h.alert_level IN ('warning', 'critical')\nORDER BY collected_at",
+          "rawSql": "SELECT \n  collected_at as time,\n  CONCAT(i.name, ' - ', r.source_path) as metric,\n  h.lag_seconds / 60 as value\nFROM snapmirror_status_history h\nINNER JOIN snapmirror_relationships r ON h.relationship_id = r.id\nINNER JOIN ontap_instances i ON h.instance_id = i.id\nWHERE \n  h.collected_at >= NOW() - INTERVAL 24 HOUR\nORDER BY collected_at",
           "refId": "A"
         }
       ],
-      "title": "Lag Trend - Last 24 Hours (Problematic Relations)",
+      "title": "Lag Trend - Last 24 Hours (All Relations)",
       "type": "timeseries"
     }
   ],
