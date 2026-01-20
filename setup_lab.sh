@@ -117,14 +117,21 @@ echo "  ⚙ Configurando base de datos y usuario..."
 sleep 3
 
 # Crear base de datos y usuario
-/usr/bin/mysql -u root -pNetApp123! <<EOF 2>/dev/null || /usr/bin/mysql -u root <<EOF 2>/dev/null
+if /usr/bin/mysql -u root -pNetApp123! <<EOF 2>/dev/null
 CREATE DATABASE IF NOT EXISTS snapmirror_monitoring;
 CREATE USER IF NOT EXISTS 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';
 GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';
 FLUSH PRIVILEGES;
 EOF
-
-if [ $? -eq 0 ]; then
+then
+    echo "✓ Base de datos y usuario creados"
+elif /usr/bin/mysql -u root <<EOF 2>/dev/null
+CREATE DATABASE IF NOT EXISTS snapmirror_monitoring;
+CREATE USER IF NOT EXISTS 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';
+GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+then
     echo "✓ Base de datos y usuario creados"
 else
     echo "⚠ Error creando base de datos"
