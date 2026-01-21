@@ -8,6 +8,7 @@ which python3
 # 2. Verificar MySQL
 mysql --version
 systemctl status mysqld || systemctl status mysql
+pip3 --version
 
 # 3. Verificar Grafana
 grafana-server -v
@@ -15,13 +16,15 @@ systemctl status grafana-server
 
 # 4. Verificar conectividad a ONTAP
 ping <ip_cluster_ontap>
+wget --version
 curl -k https://<ip_cluster_ontap>/api/cluster
 
 # 5. Verificar permisos de usuario
+pip3 list | grep -E 'aiohttp|PyMySQL'
 whoami
 pwd
 ls -l
-
+git --version || (wget https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.42.0.tar.gz && echo "Instala git manualmente si no está")
 # 6. Verificar espacio en disco
 df -h .
 
