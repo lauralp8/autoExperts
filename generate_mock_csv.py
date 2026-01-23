@@ -1,12 +1,12 @@
 """
-Script para generar CSV de instancias mock
-Útil para testing y desarrollo
+Script to generate CSV of mock instances
+Useful for testing and development
 """
 
 import sys
 from pathlib import Path
 
-# Añadir src al path
+# Add src to path
 sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
 from src.mock_data import generate_csv_instances
@@ -15,36 +15,36 @@ import argparse
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Genera CSV con instancias ONTAP Select simuladas'
+        description='Generate CSV with simulated ONTAP Select instances'
     )
     
     parser.add_argument(
         '--num-instances',
         type=int,
         default=100,
-        help='Número de instancias a generar (default: 100)'
+        help='Number of instances to generate (default: 100)'
     )
     
     parser.add_argument(
         '--output',
         default='config/ontap_instances_mock.csv',
-        help='Archivo de salida (default: config/ontap_instances_mock.csv)'
+        help='Output file (default: config/ontap_instances_mock.csv)'
     )
     
     args = parser.parse_args()
     
-    print(f"Generando {args.num_instances} instancias...")
+    print(f"Generating {args.num_instances} instances...")
     csv_content = generate_csv_instances(
         num_instances=args.num_instances,
         output_file=args.output
     )
     
-    print(f"✓ CSV generado en: {args.output}")
-    print(f"✓ Total instancias: {args.num_instances}")
+    print(f"✓ CSV generated in: {args.output}")
+    print(f"✓ Total instances: {args.num_instances}")
     
-    # Mostrar preview
+    # Show preview
     lines = csv_content.split('\n')
-    print("\nPreview (primeras 5 líneas):")
+    print("\nPreview (first 5 lines):")
     print('-' * 80)
     for line in lines[:6]:
         print(line)

@@ -1,5 +1,5 @@
 """
-Módulo de base de datos MySQL para SnapMirror Monitoring
+MySQL database module for SnapMirror Monitoring
 """
 
 import pymysql
@@ -11,18 +11,18 @@ logger = logging.getLogger(__name__)
 
 
 class SnapMirrorDB:
-    """Gestión de base de datos MySQL para monitorización SnapMirror"""
+    """MySQL database management for SnapMirror monitoring"""
     
     def __init__(self, host: str, port: int, user: str, password: str, database: str):
         """
-        Inicializa la conexión a MySQL
+        Initialize MySQL connection
         
         Args:
-            host: Host de MySQL
-            port: Puerto (generalmente 3306)
-            user: Usuario de MySQL
-            password: Contraseña
-            database: Nombre de la base de datos
+            host: MySQL host
+            port: Port (typically 3306)
+            user: MySQL user
+            password: Password
+            database: Database name
         """
         self.config = {
             'host': host,
@@ -36,31 +36,31 @@ class SnapMirrorDB:
         self.connection = None
     
     def connect(self):
-        """Establece conexión con MySQL"""
+        """Establish connection to MySQL"""
         try:
             self.connection = pymysql.connect(**self.config)
-            logger.info("Conexión exitosa a MySQL")
+            logger.info("Successful connection to MySQL")
         except Exception as e:
-            logger.error(f"Error conectando a MySQL: {e}")
+            logger.error(f"Error connecting to MySQL: {e}")
             raise
     
     def disconnect(self):
-        """Cierra la conexión"""
+        """Close the connection"""
         if self.connection:
             self.connection.close()
-            logger.info("Conexión a MySQL cerrada")
+            logger.info("MySQL connection closed")
     
     def _execute(self, query: str, params: tuple = None, fetch: bool = False):
         """
-        Ejecuta una query SQL
+        Execute an SQL query
         
         Args:
-            query: Query SQL
-            params: Parámetros para la query
-            fetch: Si True, retorna los resultados
+            query: SQL query
+            params: Query parameters
+            fetch: If True, return the results
             
         Returns:
-            Resultados si fetch=True, sino ID del último insert
+            Results if fetch=True, otherwise last insert ID
         """
         try:
             with self.connection.cursor() as cursor:
@@ -73,17 +73,17 @@ class SnapMirrorDB:
                     return cursor.lastrowid
                     
         except Exception as e:
-            logger.error(f"Error ejecutando query: {e}")
+            logger.error(f"Error executing query: {e}")
             self.connection.rollback()
             raise
     
     def upsert_instance(self, name: str, ip: str, latitude: float, longitude: float, 
                        location: str, cluster_uuid: Optional[str] = None) -> int:
         """
-        Inserta o actualiza una instancia ONTAP
+        Insert or update an ONTAP instance
         
         Returns:
-            ID de la instancia
+            Instance ID
         """
         query = """
         INSERT INTO ontap_instances (name, ip_address, latitude, longitude, location_name, cluster_uuid)
@@ -96,7 +96,7 @@ class SnapMirrorDB:
         
         instance_id = self._execute(query, (name, ip, latitude, longitude, location, cluster_uuid))
         
-        # Si fue UPDATE, obtener el ID
+        # If it was an UPDATE, get the ID
         if instance_id == 0:
             query_id = "SELECT id FROM ontap_instances WHERE name = %s"
             result = self._execute(query_id, (name,), fetch=True)
@@ -107,10 +107,10 @@ class SnapMirrorDB:
     def upsert_relationship(self, instance_id: int, uuid: str, source_path: str,
                            dest_path: str, policy: str, rel_type: str = 'async') -> int:
         """
-        Inserta o actualiza una relación SnapMirror
+        Insert or update a SnapMirror relationship
         
         Returns:
-            ID de la relación
+            Relationship ID
         """
         query = """
         INSERT INTO snapmirror_relationships 
@@ -124,7 +124,7 @@ class SnapMirrorDB:
         
         rel_id = self._execute(query, (instance_id, uuid, source_path, dest_path, policy, rel_type))
         
-        # Si fue UPDATE, obtener el ID
+        # If it was an UPDATE, get the ID
         if rel_id == 0:
             query_id = "SELECT id FROM snapmirror_relationships WHERE instance_id = %s AND relationship_uuid = %s"
             result = self._execute(query_id, (instance_id, uuid), fetch=True)
@@ -137,18 +137,18 @@ class SnapMirrorDB:
                              transfer_state: str, last_transfer_time: Optional[int],
                              alert_level: str, error_msg: Optional[str] = None):
         """
-        Actualiza el estado actual de una relación SnapMirror
+        Update the current status of a SnapMirror relationship
         
         Args:
-            relationship_id: ID de la relación
-            instance_id: ID de la instancia
-            lag_seconds: Lag en segundos
-            state: Estado de la relación
-            health: Estado de salud (True/False)
-            transfer_state: Estado de transferencia
-            last_transfer_time: Timestamp de última transferencia
+            relationship_id: Relationship ID
+            instance_id: Instance ID
+            lag_seconds: Lag in seconds
+            state: Relationship state
+            health: Health status (True/False)
+            transfer_state: Transfer state
+            last_transfer_time: Last transfer timestamp
             alert_level: ok, warning, critical, error
-            error_msg: Mensaje de error opcional
+            error_msg: Optional error message
         """
         health_status = 'healthy' if health else 'unhealthy'
         
@@ -175,7 +175,7 @@ class SnapMirrorDB:
     def insert_history(self, relationship_id: int, instance_id: int,
                       lag_seconds: int, state: str, health: str, alert_level: str):
         """
-        Inserta un registro en el histórico
+        Insert a record in the history
         """
         query = """
         INSERT INTO snapmirror_status_history 
@@ -187,10 +187,10 @@ class SnapMirrorDB:
     
     def get_instance_by_name(self, name: str) -> Optional[Dict]:
         """
-        Obtiene una instancia por nombre
+        Get an instance by name
         
         Returns:
-            Diccionario con datos de la instancia o None
+            Dictionary with instance data or None
         """
         query = "SELECT * FROM ontap_instances WHERE name = %s"
         result = self._execute(query, (name,), fetch=True)
@@ -198,33 +198,33 @@ class SnapMirrorDB:
     
     def get_all_instances(self) -> List[Dict]:
         """
-        Obtiene todas las instancias activas
+        Get all active instances
         
         Returns:
-            Lista de instancias
+            List of instances
         """
         query = "SELECT * FROM ontap_instances WHERE is_active = TRUE ORDER BY name"
         return self._execute(query, fetch=True)
     
     def get_map_view(self) -> List[Dict]:
         """
-        Obtiene datos para el mapa de Grafana
+        Get data for the Grafana map
         
         Returns:
-            Lista con datos agregados por instancia
+            List with aggregated data per instance
         """
         query = "SELECT * FROM v_snapmirror_map ORDER BY overall_status DESC, instance_name"
         return self._execute(query, fetch=True)
     
     def get_detail_view(self, instance_name: Optional[str] = None) -> List[Dict]:
         """
-        Obtiene vista detallada de relaciones
+        Get detailed view of relationships
         
         Args:
-            instance_name: Filtrar por nombre de instancia (opcional)
+            instance_name: Filter by instance name (optional)
             
         Returns:
-            Lista con detalle de relaciones
+            List with relationship details
         """
         if instance_name:
             query = "SELECT * FROM v_snapmirror_detail WHERE instance_name = %s ORDER BY alert_level DESC"
@@ -235,10 +235,10 @@ class SnapMirrorDB:
     
     def get_statistics(self) -> Dict:
         """
-        Obtiene estadísticas generales
+        Get general statistics
         
         Returns:
-            Diccionario con contadores
+            Dictionary with counters
         """
         query = """
         SELECT 

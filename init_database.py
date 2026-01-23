@@ -1,6 +1,6 @@
 """
-Script para inicializar la base de datos MySQL
-Crea las tablas y vistas necesarias
+Script to initialize MySQL database
+Creates necessary tables and views
 """
 
 import pymysql
@@ -10,23 +10,23 @@ from pathlib import Path
 
 
 def load_config(config_path: str = 'config/config.yaml'):
-    """Carga configuración YAML"""
+    """Load YAML configuration"""
     with open(config_path, 'r') as f:
         return yaml.safe_load(f)
 
 
 def init_database(host: str, port: int, user: str, password: str, database: str, schema_file: str):
     """
-    Inicializa la base de datos ejecutando el schema SQL
+    Initialize database by executing the schema SQL
     
     Args:
-        host, port, user, password: Credenciales MySQL
-        database: Nombre de la base de datos
-        schema_file: Ruta al archivo schema.sql
+        host, port, user, password: MySQL credentials
+        database: Database name
+        schema_file: Path to schema.sql file
     """
-    print(f"Conectando a MySQL en {host}:{port}...")
+    print(f"Connecting to MySQL on {host}:{port}...")
     
-    # Conectar sin especificar database (para poder crearlo)
+    # Connect without specifying database (to be able to create it)
     connection = pymysql.connect(
         host=host,
         port=port,
@@ -37,28 +37,28 @@ def init_database(host: str, port: int, user: str, password: str, database: str,
     
     try:
         with connection.cursor() as cursor:
-            # Leer schema SQL
+            # Read SQL schema
             with open(schema_file, 'r', encoding='utf-8') as f:
                 sql_script = f.read()
             
-            # Ejecutar cada statement
+            # Execute each statement
             statements = sql_script.split(';')
             
             for i, statement in enumerate(statements):
                 statement = statement.strip()
                 if statement:
-                    print(f"Ejecutando statement {i + 1}/{len(statements)}...")
+                    print(f"Executing statement {i + 1}/{len(statements)}...")
                     cursor.execute(statement)
             
             connection.commit()
-            print("\n✓ Base de datos inicializada correctamente")
+            print("\n✓ Database initialized successfully")
             
-            # Verificar tablas creadas
+            # Verify created tables
             cursor.execute(f"USE {database}")
             cursor.execute("SHOW TABLES")
             tables = cursor.fetchall()
             
-            print(f"\nTablas creadas ({len(tables)}):")
+            print(f"\nTables created ({len(tables)}):")
             for table in tables:
                 print(f"  - {table[0]}")
             
@@ -68,30 +68,30 @@ def init_database(host: str, port: int, user: str, password: str, database: str,
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Inicializa la base de datos MySQL para SnapMirror Monitor'
+        description='Initialize MySQL database for SnapMirror Monitor'
     )
     
     parser.add_argument(
         '--config',
         default='config/config.yaml',
-        help='Archivo de configuración (default: config/config.yaml)'
+        help='Configuration file (default: config/config.yaml)'
     )
     
     parser.add_argument(
         '--schema',
         default='config/mysql_schema.sql',
-        help='Archivo schema SQL (default: config/mysql_schema.sql)'
+        help='SQL schema file (default: config/mysql_schema.sql)'
     )
     
     parser.add_argument(
         '--force',
         action='store_true',
-        help='Forzar recreación (DROP DATABASE si existe)'
+        help='Force recreation (DROP DATABASE if exists)'
     )
     
     args = parser.parse_args()
     
-    # Cargar configuración
+    # Load configuration
     config = load_config(args.config)
     db_config = config['database']
     
@@ -104,9 +104,9 @@ def main():
     print("="*60)
     
     if args.force:
-        confirm = input("\n⚠️  ADVERTENCIA: Se eliminará la base de datos existente. ¿Continuar? (yes/no): ")
+        confirm = input("\n⚠️  WARNING: Existing database will be deleted. Continue? (yes/no): ")
         if confirm.lower() != 'yes':
-            print("Cancelado.")
+            print("Cancelled.")
             return
     
     try:

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Script de descubrimiento automático de clusters ONTAP
-Conecta vía API REST, descubre relaciones SnapMirror y genera/actualiza el CSV
-Modo incremental: permite añadir nuevos clusters sin borrar los existentes
+Automatic discovery script for ONTAP clusters
+Connects via REST API, discovers SnapMirror relationships and generates/updates the CSV
+Incremental mode: allows adding new clusters without deleting existing ones
 """
 
 import csv
@@ -12,26 +12,26 @@ import urllib3
 from pathlib import Path
 from requests.auth import HTTPBasicAuth
 
-# Deshabilitar warnings SSL
+# Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def print_header(text):
-    """Imprime un encabezado formateado"""
+    """Print a formatted header"""
     print("\n" + "=" * 70)
     print(text)
     print("=" * 70)
 
 
 def print_section(text):
-    """Imprime una sección formateada"""
+    """Print a formatted section"""
     print("\n" + "-" * 70)
     print(text)
     print("-" * 70)
 
 
 def get_input(prompt, default=None):
-    """Obtiene input del usuario con valor por defecto"""
+    """Get user input with default value"""
     if default:
         prompt = f"{prompt} [{default}]: "
     else:
@@ -42,7 +42,7 @@ def get_input(prompt, default=None):
 
 
 def get_float(prompt, default=None):
-    """Obtiene un número float del usuario"""
+    """Get a float number from the user"""
     while True:
         try:
             if default is not None:
@@ -51,11 +51,11 @@ def get_float(prompt, default=None):
                 value = input(f"{prompt}: ").strip()
             return float(value)
         except ValueError:
-            print("❌ Error: Introduce un número válido")
+            print("❌ Error: Enter a valid number")
 
 
 def get_yes_no(prompt, default=True):
-    """Obtiene respuesta sí/no del usuario"""
+    """Get yes/no response from the user"""
     default_text = "S/n" if default else "s/N"
     while True:
         response = input(f"{prompt} ({default_text}): ").strip().lower()
@@ -65,15 +65,15 @@ def get_yes_no(prompt, default=True):
             return True
         elif response in ['n', 'no']:
             return False
-        print("❌ Responde 's' o 'n'")
+        print("❌ Answer 's' or 'n'")
 
 
 def test_ontap_connection(host, username, password):
     """
-    Prueba la conexión al cluster ONTAP
+    Test connection to ONTAP cluster
     
     Returns:
-        dict con cluster info o None si falla
+        dict with cluster info or None if it fails
     """
     url = f"https://{host}/api/cluster"
     
@@ -98,10 +98,10 @@ def test_ontap_connection(host, username, password):
             return None
     
     except requests.exceptions.ConnectionError:
-        print(f"❌ No se pudo conectar a {host} - verifica IP y red")
+        print(f"❌ Could not connect to {host} - check IP and network")
         return None
     except requests.exceptions.Timeout:
-        print(f"❌ Timeout conectando a {host}")
+        print(f"❌ Timeout connecting to {host}")
         return None
     except Exception as e:
         print(f"❌ Error: {e}")
@@ -110,10 +110,10 @@ def test_ontap_connection(host, username, password):
 
 def get_snapmirror_relationships(host, username, password):
     """
-    Obtiene todas las relaciones SnapMirror del cluster
+    Get all SnapMirror relationships from the cluster
     
     Returns:
-        Lista de relaciones SnapMirror
+        List of SnapMirror relationships
     """
     url = f"https://{host}/api/snapmirror/relationships"
     
@@ -136,16 +136,16 @@ def get_snapmirror_relationships(host, username, password):
             data = response.json()
             return data.get('records', [])
         else:
-            print(f"⚠ Error obteniendo relaciones: HTTP {response.status_code}")
+            print(f"⚠ Error getting relationships: HTTP {response.status_code}")
             return []
     
     except Exception as e:
-        print(f"⚠ Error obteniendo relaciones SnapMirror: {e}")
+        print(f"⚠ Error getting SnapMirror relationships: {e}")
         return []
 
 
 def load_existing_csv(csv_path):
-    """Carga el CSV existente si existe"""
+    """Load existing CSV if it exists"""
     if not Path(csv_path).exists():
         return []
     
@@ -159,7 +159,7 @@ def load_existing_csv(csv_path):
 
 
 def save_csv(csv_path, instances):
-    """Guarda el CSV con las instancias"""
+    """Save the CSV with instances"""
     Path('config').mkdir(exist_ok=True)
     
     fieldnames = ['name', 'ip_address', 'latitude', 'longitude', 'location_name', 'username', 'password']
@@ -171,88 +171,88 @@ def save_csv(csv_path, instances):
 
 
 def main():
-    print_header("DESCUBRIMIENTO AUTOMÁTICO DE CLUSTERS ONTAP")
-    print("Este script se conecta a clusters ONTAP vía API REST y descubre")
-    print("las relaciones SnapMirror automáticamente.")
+    print_header("AUTOMATIC DISCOVERY OF ONTAP CLUSTERS")
+    print("This script connects to ONTAP clusters via REST API and discovers")
+    print("SnapMirror relationships automatically.")
     print()
     
     csv_path = 'config/ontap_instances.csv'
     
-    # Verificar si existe CSV previo
+    # Check if previous CSV exists
     existing_instances = load_existing_csv(csv_path)
     
     if existing_instances:
-        print(f"📁 Se encontró archivo existente con {len(existing_instances)} instancias")
+        print(f"📁 Found existing file with {len(existing_instances)} instances")
         print()
-        print("Modo de operación:")
-        print("  1. AÑADIR - Agregar nuevos clusters (mantiene los existentes)")
-        print("  2. REEMPLAZAR - Crear desde cero (borra los existentes)")
+        print("Operation mode:")
+        print("  1. ADD - Add new clusters (keeps existing ones)")
+        print("  2. REPLACE - Create from scratch (deletes existing ones)")
         print()
         
-        mode = input("Selecciona modo (1/2) [1]: ").strip()
+        mode = input("Select mode (1/2) [1]: ").strip()
         
         if mode == '2':
-            if get_yes_no("⚠ ¿Confirmas eliminar todos los datos existentes?", False):
+            if get_yes_no("⚠ Confirm deletion of all existing data?", False):
                 instances = []
-                print("✓ Modo REEMPLAZAR activado")
+                print("✓ REPLACE mode activated")
             else:
-                print("Cancelado. Usando modo AÑADIR")
+                print("Cancelled. Using ADD mode")
                 instances = existing_instances
         else:
             instances = existing_instances
-            print("✓ Modo AÑADIR activado")
+            print("✓ ADD mode activated")
     else:
         instances = []
-        print("📝 No hay archivo previo. Creando desde cero...")
+        print("📝 No previous file. Creating from scratch...")
     
-    # Bucle para añadir clusters
+    # Loop to add clusters
     cluster_count = 0
     
     while True:
         print_section(f"CLUSTER #{cluster_count + 1}")
         
-        # Datos del cluster
-        cluster_name = get_input("Nombre del cluster/instancia", f"ontap-cluster-{cluster_count + 1:02d}")
-        cluster_ip = get_input("Dirección IP del cluster")
+        # Cluster data
+        cluster_name = get_input("Cluster/instance name", f"ontap-cluster-{cluster_count + 1:02d}")
+        cluster_ip = get_input("Cluster IP address")
         
         if not cluster_ip:
-            print("❌ IP requerida")
+            print("❌ IP required")
             continue
         
-        # Credenciales
-        username = get_input("Usuario admin", "admin")
-        password = get_input("Contraseña")
+        # Credentials
+        username = get_input("Admin user", "admin")
+        password = get_input("Password")
         
-        # Probar conexión
-        print(f"\n🔍 Conectando a {cluster_ip}...")
+        # Test connection
+        print(f"\n🔍 Connecting to {cluster_ip}...")
         cluster_info = test_ontap_connection(cluster_ip, username, password)
         
         if not cluster_info:
-            print("❌ No se pudo conectar al cluster")
-            retry = get_yes_no("¿Reintentar con otras credenciales?", True)
+            print("❌ Could not connect to cluster")
+            retry = get_yes_no("Retry with other credentials?", True)
             if retry:
                 continue
             else:
                 break
         
-        print(f"✓ Conectado exitosamente a: {cluster_info['name']}")
+        print(f"✓ Successfully connected to: {cluster_info['name']}")
         print(f"  UUID: {cluster_info['uuid']}")
-        print(f"  Versión: {cluster_info['version']}")
+        print(f"  Version: {cluster_info['version']}")
         
-        # Ubicación geográfica
+        # Geographic location
         print()
-        location_name = get_input("Ubicación/Datacenter", cluster_info['name'])
-        print(f"Coordenadas geográficas de {location_name}:")
-        print("  (Puedes buscarlas en Google Maps → Click derecho → Coordenadas)")
-        latitude = get_float("  Latitud (ej: 40.4168)", 40.4168)
-        longitude = get_float("  Longitud (ej: -3.7038)", -3.7038)
+        location_name = get_input("Location/Datacenter", cluster_info['name'])
+        print(f"Geographic coordinates of {location_name}:")
+        print("  (You can find them on Google Maps → Right click → Coordinates)")
+        latitude = get_float("  Latitude (e.g.: 40.4168)", 40.4168)
+        longitude = get_float("  Longitude (e.g.: -3.7038)", -3.7038)
         
-        # Descubrir relaciones SnapMirror
-        print(f"\n🔍 Descubriendo relaciones SnapMirror en {cluster_ip}...")
+        # Discover SnapMirror relationships
+        print(f"\n🔍 Discovering SnapMirror relationships on {cluster_ip}...")
         relationships = get_snapmirror_relationships(cluster_ip, username, password)
         
         if relationships:
-            print(f"✓ Se encontraron {len(relationships)} relaciones SnapMirror:")
+            print(f"✓ Found {len(relationships)} SnapMirror relationships:")
             for i, rel in enumerate(relationships[:5], 1):
                 src = rel.get('source', {}).get('path', 'N/A')
                 dst = rel.get('destination', {}).get('path', 'N/A')
@@ -260,12 +260,12 @@ def main():
                 print(f"  {i}. {src} → {dst} ({state})")
             
             if len(relationships) > 5:
-                print(f"  ... y {len(relationships) - 5} más")
+                print(f"  ... and {len(relationships) - 5} more")
         else:
-            print("⚠ No se encontraron relaciones SnapMirror en este cluster")
-            print("  El cluster se añadirá igualmente al inventario")
+            print("⚠ No SnapMirror relationships found on this cluster")
+            print("  The cluster will be added to inventory anyway")
         
-        # Añadir al inventario
+        # Add to inventory
         instance = {
             'name': cluster_name,
             'ip_address': cluster_ip,
@@ -279,28 +279,28 @@ def main():
         instances.append(instance)
         cluster_count += 1
         
-        print(f"\n✓ Cluster añadido al inventario ({cluster_count} total)")
+        print(f"\n✓ Cluster added to inventory ({cluster_count} total)")
         
-        # Preguntar si quiere añadir más
+        # Ask if wants to add more
         print()
-        if not get_yes_no("¿Añadir otro cluster?", False):
+        if not get_yes_no("Add another cluster?", False):
             break
     
-    # Guardar CSV
+    # Save CSV
     if cluster_count == 0:
-        print("\n⚠ No se añadió ningún cluster. No se modificó el archivo")
+        print("\n⚠ No cluster was added. File was not modified")
         return
     
-    print_header("GUARDANDO CONFIGURACIÓN")
+    print_header("SAVING CONFIGURATION")
     
     save_csv(csv_path, instances)
     
-    print(f"✓ CSV guardado: {csv_path}")
-    print(f"✓ Total instancias: {len(instances)}")
+    print(f"✓ CSV saved: {csv_path}")
+    print(f"✓ Total instances: {len(instances)}")
     
-    # Mostrar preview
+    # Show preview
     print()
-    print("Preview del archivo:")
+    print("File preview:")
     print_section("")
     
     with open(csv_path, 'r') as f:
@@ -310,40 +310,40 @@ def main():
     
     print("-" * 70)
     
-    # Actualizar config.yaml
+    # Update config.yaml
     print()
-    if get_yes_no("¿Actualizar config.yaml para usar modo 'real'?", True):
+    if get_yes_no("Update config.yaml to use 'real' mode?", True):
         config_file = 'config/config.yaml'
         
         try:
             with open(config_file, 'r') as f:
                 config_content = f.read()
             
-            # Cambiar modo a real
+            # Change mode to real
             import re
             config_content = re.sub(r'mode:\s*mock', 'mode: real', config_content)
             
             with open(config_file, 'w') as f:
                 f.write(config_content)
             
-            print(f"✓ config.yaml actualizado a modo 'real'")
+            print(f"✓ config.yaml updated to 'real' mode")
         
         except Exception as e:
-            print(f"⚠ No se pudo actualizar config.yaml: {e}")
-            print(f"  Cambia manualmente 'mode: mock' a 'mode: real'")
+            print(f"⚠ Could not update config.yaml: {e}")
+            print(f"  Manually change 'mode: mock' to 'mode: real'")
     
-    # Instrucciones finales
-    print_header("✅ CONFIGURACIÓN COMPLETADA")
+    # Final instructions
+    print_header("✅ CONFIGURATION COMPLETED")
     print()
-    print("Próximos pasos:")
-    print(f"  1. Revisar archivo: {csv_path}")
-    print("  2. Ejecutar collector:")
+    print("Next steps:")
+    print(f"  1. Review file: {csv_path}")
+    print("  2. Run collector:")
     print("     python3.12 run_collector.py --mode real --once")
-    print("  3. Verificar datos en Grafana")
-    print("  4. Para añadir más clusters, ejecuta este script nuevamente")
+    print("  3. Verify data in Grafana")
+    print("  4. To add more clusters, run this script again")
     print()
-    print("El collector se conectará a cada cluster y monitoreará")
-    print("todas las relaciones SnapMirror automáticamente.")
+    print("The collector will connect to each cluster and monitor")
+    print("all SnapMirror relationships automatically.")
     print()
 
 
@@ -351,5 +351,5 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print("\n\n⚠ Proceso cancelado por el usuario")
+        print("\n\n⚠ Process cancelled by user")
         sys.exit(1)

@@ -1,0 +1,59 @@
+# Pre-check for NetApp SnapMirror Monitor Customer Environment
+# Execute each block and verify everything responds OK
+
+# 1. Verify Python
+python3 --version
+which python3
+
+# 2. Verify MySQL
+mysql --version
+systemctl status mysqld || systemctl status mysql
+
+# 3. Verify Grafana
+grafana-server -v
+systemctl status grafana-server
+
+# 4. Verify connectivity to ONTAP
+ping <ontap_cluster_ip>
+curl -k https://<ontap_cluster_ip>/api/cluster
+
+# 5. Verify user permissions
+pip3 list | grep -E 'aiohttp|PyMySQL|PyYAML|requests'
+whoami
+pwd
+ls -l
+
+# 6. Verify disk space
+df -h .
+
+# 7. Verify network access (internet for repo clone)
+curl https://github.com
+
+# 8. Verify local ports
+ss -tuln | grep 3306   # MySQL
+ss -tuln | grep 3000   # Grafana
+
+# 9. Verify Python dependencies (if venv already exists)
+pip3 list | grep -E 'aiohttp|PyMySQL|PyYAML|requests'
+
+# 10. Verify you can clone the project
+git --version
+git clone <repo-url> corme
+ls corme
+
+# 11. Verify you can edit files
+touch test.txt
+echo "test" > test.txt
+cat test.txt
+rm test.txt
+
+# 12. Verify SELinux status (important for Grafana-MySQL connection)
+getenforce
+getsebool httpd_can_network_connect_db
+
+# If everything responds OK, you can deploy the project without issues.
+# 
+# Common issues and solutions:
+# - If SELinux blocks Grafana: sudo setsebool -P httpd_can_network_connect_db 1
+# - If MySQL port not listening: Check bind-address in /etc/my.cnf
+# - If Grafana not starting: Check logs with journalctl -u grafana-server -e

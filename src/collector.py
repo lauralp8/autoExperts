@@ -1,6 +1,6 @@
 """
-Collector principal de SnapMirror con recolección en cascada
-Consulta 1400 instancias ONTAP Select cada 5 minutos de forma escalonada
+Main SnapMirror Collector with cascade collection
+Queries 1400 ONTAP Select instances every 5 minutes in staggered fashion
 """
 
 import asyncio
@@ -16,7 +16,7 @@ from ontap_client import ONTAPClient
 from database import SnapMirrorDB
 from mock_data import MockDataGenerator
 
-# Configurar logging
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -30,43 +30,43 @@ logger = logging.getLogger(__name__)
 
 
 class SnapMirrorCollector:
-    """Recolector de datos SnapMirror con polling en cascada"""
+    """SnapMirror data collector with cascade polling"""
     
     def __init__(self, config_path: str = 'config/config.yaml'):
         """
-        Inicializa el collector
+        Initialize the collector
         
         Args:
-            config_path: Ruta al archivo de configuración YAML
+            config_path: Path to YAML configuration file
         """
         self.config = self._load_config(config_path)
         self.db = None
         self.instances = []
         self.mock_generator = None
         
-        # Configuración de umbrales
+        # Threshold configuration
         self.warning_threshold = self.config['thresholds']['warning']
         self.critical_threshold = self.config['thresholds']['critical']
         
-        # Configuración de cascada
+        # Cascade configuration
         self.stagger_delay = self.config['collector']['stagger_delay_seconds']
         
-        # Modo de operación
+        # Operation mode
         self.mode = self.config['collector']['mode']
         
-        logger.info(f"Collector inicializado en modo: {self.mode}")
+        logger.info(f"Collector initialized in mode: {self.mode}")
     
     def _load_config(self, config_path: str) -> Dict:
-        """Carga configuración desde YAML"""
+        """Load configuration from YAML"""
         with open(config_path, 'r') as f:
             return yaml.safe_load(f)
     
     def _load_instances_from_csv(self, csv_path: str = 'config/ontap_instances.csv') -> List[Dict]:
         """
-        Carga instancias desde CSV
+        Load instances from CSV
         
         Returns:
-            Lista de diccionarios con datos de instancias
+            List of dictionaries with instance data
         """
         instances = []
         
@@ -74,7 +74,7 @@ class SnapMirrorCollector:
             with open(csv_path, 'r') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    # Saltar líneas de comentario
+                    # Skip comment lines
                     if row['name'].startswith('#'):
                         continue
                     
@@ -88,16 +88,16 @@ class SnapMirrorCollector:
                         'password': row['password']
                     })
             
-            logger.info(f"Cargadas {len(instances)} instancias desde {csv_path}")
+            logger.info(f"Loaded {len(instances)} instances from {csv_path}")
             
         except FileNotFoundError:
-            logger.warning(f"Archivo {csv_path} no encontrado, usando modo mock")
+            logger.warning(f"File {csv_path} not found, using mock mode")
         
         return instances
     
     def setup(self):
-        """Configura conexiones y carga datos iniciales"""
-        # Conectar a MySQL
+        """Configure connections and load initial data"""
+        # Connect to MySQL
         db_config = self.config['database']
         self.db = SnapMirrorDB(
             host=db_config['host'],
@@ -108,27 +108,27 @@ class SnapMirrorCollector:
         )
         self.db.connect()
         
-        # Cargar instancias
+        # Load instances
         if self.mode == 'mock':
-            # Generar instancias simuladas
+            # Generate mock instances
             mock_config = self.config['mock']
             self.mock_generator = MockDataGenerator(
                 num_instances=mock_config['num_instances'],
                 relationships_per_instance=mock_config['num_relationships_per_instance']
             )
             self.instances = self.mock_generator.generate_instances()
-            logger.info(f"Modo MOCK: {len(self.instances)} instancias simuladas")
+            logger.info(f"MOCK mode: {len(self.instances)} simulated instances")
         else:
-            # Cargar desde CSV
+            # Load from CSV
             self.instances = self._load_instances_from_csv()
-            logger.info(f"Modo REAL: {len(self.instances)} instancias cargadas")
+            logger.info(f"REAL mode: {len(self.instances)} instances loaded")
         
-        # Registrar instancias en BD
+        # Register instances in database
         self._register_instances()
     
     def _register_instances(self):
-        """Registra todas las instancias en la base de datos"""
-        logger.info("Registrando instancias en base de datos...")
+        """Register all instances in the database"""
+        logger.info("Registering instances in database...")
         
         for inst in self.instances:
             try:
@@ -140,25 +140,25 @@ class SnapMirrorCollector:
                     location=inst['location_name']
                 )
             except Exception as e:
-                logger.error(f"Error registrando instancia {inst['name']}: {e}")
+                logger.error(f"Error registering instance {inst['name']}: {e}")
         
-        logger.info("Instancias registradas")
+        logger.info("Instances registered")
     
     def _collect_from_instance_mock(self, instance: Dict) -> Dict:
         """
-        Recolecta datos de una instancia en modo MOCK
+        Collect data from an instance in MOCK mode
         
         Returns:
-            Diccionario con cluster_info y relationships
+            Dictionary with cluster_info and relationships
         """
         return self.mock_generator.generate_mock_response(instance['name'])
     
     def _collect_from_instance_real(self, instance: Dict) -> Dict:
         """
-        Recolecta datos de una instancia real via REST API
+        Collect data from a real instance via REST API
         
         Returns:
-            Diccionario con cluster_info y relationships
+            Dictionary with cluster_info and relationships
         """
         try:
             client = ONTAPClient(
@@ -167,10 +167,10 @@ class SnapMirrorCollector:
                 password=instance['password']
             )
             
-            # Obtener info del cluster
+            # Get cluster info
             cluster_info = client.get_cluster_info()
             
-            # Obtener relaciones SnapMirror
+            # Get SnapMirror relationships
             relationships = client.get_snapmirror_relationships()
             
             return {
@@ -180,7 +180,7 @@ class SnapMirrorCollector:
             }
             
         except Exception as e:
-            logger.error(f"Error recolectando de {instance['name']}: {e}")
+            logger.error(f"Error collecting from {instance['name']}: {e}")
             return {
                 'cluster_info': {'error': str(e)},
                 'relationships': [],
@@ -189,22 +189,22 @@ class SnapMirrorCollector:
     
     def _process_instance_data(self, instance: Dict, data: Dict):
         """
-        Procesa y almacena los datos recolectados de una instancia
+        Process and store collected data from an instance
         
         Args:
-            instance: Diccionario con info de la instancia
-            data: Datos recolectados (cluster_info, relationships)
+            instance: Dictionary with instance info
+            data: Collected data (cluster_info, relationships)
         """
         try:
-            # Obtener ID de la instancia
+            # Get instance ID
             db_instance = self.db.get_instance_by_name(instance['name'])
             if not db_instance:
-                logger.error(f"Instancia {instance['name']} no encontrada en BD")
+                logger.error(f"Instance {instance['name']} not found in database")
                 return
             
             instance_id = db_instance['id']
             
-            # Actualizar cluster UUID si está disponible
+            # Update cluster UUID if available
             cluster_uuid = data['cluster_info'].get('uuid')
             if cluster_uuid:
                 self.db.upsert_instance(
@@ -216,9 +216,9 @@ class SnapMirrorCollector:
                     cluster_uuid=cluster_uuid
                 )
             
-            # Procesar cada relación SnapMirror
+            # Process each SnapMirror relationship
             for rel in data['relationships']:
-                # Registrar relación
+                # Register relationship
                 rel_id = self.db.upsert_relationship(
                     instance_id=instance_id,
                     uuid=rel['uuid'],
@@ -228,35 +228,35 @@ class SnapMirrorCollector:
                     rel_type='async'
                 )
                 
-                # Calcular nivel de alerta
+                # Calculate alert level
                 lag_seconds = rel['lag_seconds']
                 healthy = rel['healthy']
                 
                 if not healthy:
                     alert_level = 'error'
-                    error_msg = f"Relación en estado: {rel['state']}"
+                    error_msg = f"Relationship in state: {rel['state']}"
                 elif lag_seconds >= self.critical_threshold:
                     alert_level = 'critical'
-                    error_msg = f"Lag crítico: {lag_seconds // 60} minutos"
+                    error_msg = f"Critical lag: {lag_seconds // 60} minutes"
                 elif lag_seconds >= self.warning_threshold:
                     alert_level = 'warning'
-                    error_msg = f"Lag elevado: {lag_seconds // 60} minutos"
+                    error_msg = f"High lag: {lag_seconds // 60} minutes"
                 else:
                     alert_level = 'ok'
                     error_msg = None
                 
-                # Convertir last_transfer_end_time de ISO 8601 a Unix timestamp (BIGINT)
+                # Convert last_transfer_end_time from ISO 8601 to Unix timestamp (BIGINT)
                 last_transfer_time = rel.get('last_transfer_end_time')
                 if last_transfer_time:
                     try:
-                        # Convertir "2026-01-20T12:00:08+00:00" a Unix timestamp
+                        # Convert "2026-01-20T12:00:08+00:00" to Unix timestamp
                         dt = datetime.fromisoformat(last_transfer_time.replace('Z', '+00:00'))
                         last_transfer_time = int(dt.timestamp())
                     except Exception as e:
-                        logger.warning(f"Error parseando timestamp {last_transfer_time}: {e}")
+                        logger.warning(f"Error parsing timestamp {last_transfer_time}: {e}")
                         last_transfer_time = None
                 
-                # Actualizar estado actual
+                # Update current status
                 self.db.update_current_status(
                     relationship_id=rel_id,
                     instance_id=instance_id,
@@ -269,7 +269,7 @@ class SnapMirrorCollector:
                     error_msg=error_msg
                 )
                 
-                # Insertar en histórico
+                # Insert into history
                 health_status = 'healthy' if healthy else 'unhealthy'
                 self.db.insert_history(
                     relationship_id=rel_id,
@@ -280,27 +280,27 @@ class SnapMirrorCollector:
                     alert_level=alert_level
                 )
             
-            logger.info(f"✓ {instance['name']}: {len(data['relationships'])} relaciones procesadas")
+            logger.info(f"✓ {instance['name']}: {len(data['relationships'])} relationships processed")
             
         except Exception as e:
-            logger.error(f"Error procesando datos de {instance['name']}: {e}")
+            logger.error(f"Error processing data from {instance['name']}: {e}")
     
     async def collect_single_instance(self, instance: Dict, index: int, total: int):
         """
-        Recolecta datos de una única instancia (asíncrono)
+        Collect data from a single instance (asynchronous)
         
         Args:
-            instance: Datos de la instancia
-            index: Índice de la instancia (para logging)
-            total: Total de instancias
+            instance: Instance data
+            index: Instance index (for logging)
+            total: Total number of instances
         """
-        logger.info(f"[{index + 1}/{total}] Recolectando {instance['name']}...")
+        logger.info(f"[{index + 1}/{total}] Collecting {instance['name']}...")
         
-        # Recolectar datos según modo
+        # Collect data according to mode
         if self.mode == 'mock':
             data = self._collect_from_instance_mock(instance)
         else:
-            # En modo real, ejecutar en executor para no bloquear
+            # In real mode, execute in executor to avoid blocking
             loop = asyncio.get_event_loop()
             data = await loop.run_in_executor(
                 None, 
@@ -308,42 +308,42 @@ class SnapMirrorCollector:
                 instance
             )
         
-        # Procesar y almacenar
+        # Process and store
         self._process_instance_data(instance, data)
     
     async def collect_all_staggered(self):
         """
-        Recolecta datos de todas las instancias en cascada
+        Collect data from all instances in cascade
         
-        Distribuye las consultas a lo largo del intervalo para evitar picos
+        Distributes queries over the interval to avoid peaks
         """
         total_instances = len(self.instances)
         logger.info(f"\n{'='*60}")
-        logger.info(f"Iniciando recolección en cascada: {total_instances} instancias")
-        logger.info(f"Delay entre instancias: {self.stagger_delay}s")
+        logger.info(f"Starting cascade collection: {total_instances} instances")
+        logger.info(f"Delay between instances: {self.stagger_delay}s")
         logger.info(f"{'='*60}\n")
         
         start_time = time.time()
         
-        # Procesar instancias una por una con delay
+        # Process instances one by one with delay
         for idx, instance in enumerate(self.instances):
-            # Recolectar instancia
+            # Collect instance
             await self.collect_single_instance(instance, idx, total_instances)
             
-            # Delay antes de la siguiente (excepto en la última)
+            # Delay before next (except for last one)
             if idx < total_instances - 1:
                 await asyncio.sleep(self.stagger_delay)
         
         elapsed = time.time() - start_time
         
-        # Mostrar estadísticas
+        # Show statistics
         stats = self.db.get_statistics()
         
         logger.info(f"\n{'='*60}")
-        logger.info(f"Recolección completada en {elapsed:.2f} segundos")
-        logger.info(f"Estadísticas:")
-        logger.info(f"  - Total instancias: {stats.get('total_instances', 0)}")
-        logger.info(f"  - Total relaciones: {stats.get('total_relationships', 0)}")
+        logger.info(f"Collection completed in {elapsed:.2f} seconds")
+        logger.info(f"Statistics:")
+        logger.info(f"  - Total instances: {stats.get('total_instances', 0)}")
+        logger.info(f"  - Total relationships: {stats.get('total_relationships', 0)}")
         logger.info(f"  - OK: {stats.get('ok_count', 0)}")
         logger.info(f"  - WARNING: {stats.get('warning_count', 0)}")
         logger.info(f"  - CRITICAL: {stats.get('critical_count', 0)}")
@@ -352,37 +352,37 @@ class SnapMirrorCollector:
     
     async def run_continuous(self):
         """
-        Ejecuta recolección continua cada X minutos
+        Execute continuous collection every X minutes
         """
         interval = self.config['collector']['interval_seconds']
         
-        logger.info(f"Iniciando modo continuo (cada {interval}s)")
+        logger.info(f"Starting continuous mode (every {interval}s)")
         
         while True:
             try:
                 await self.collect_all_staggered()
                 
-                # Esperar hasta el siguiente ciclo
-                logger.info(f"Esperando {interval}s hasta próxima recolección...")
+                # Wait until next cycle
+                logger.info(f"Waiting {interval}s until next collection...")
                 await asyncio.sleep(interval)
                 
             except KeyboardInterrupt:
-                logger.info("Deteniendo collector...")
+                logger.info("Stopping collector...")
                 break
             except Exception as e:
-                logger.error(f"Error en ciclo de recolección: {e}")
-                await asyncio.sleep(60)  # Esperar 1 min en caso de error
+                logger.error(f"Error in collection cycle: {e}")
+                await asyncio.sleep(60)  # Wait 1 min in case of error
     
     def cleanup(self):
-        """Limpieza de recursos"""
+        """Resource cleanup"""
         if self.db:
             self.db.disconnect()
-        logger.info("Collector finalizado")
+        logger.info("Collector finished")
 
 
 async def main():
-    """Función principal"""
-    # Crear directorio de logs si no existe
+    """Main function"""
+    # Create logs directory if it doesn't exist
     Path('logs').mkdir(exist_ok=True)
     
     collector = SnapMirrorCollector()
@@ -390,7 +390,7 @@ async def main():
     try:
         collector.setup()
         
-        # Ejecutar una sola vez o en modo continuo
+        # Execute once or in continuous mode
         import sys
         if '--once' in sys.argv:
             await collector.collect_all_staggered()
@@ -398,9 +398,9 @@ async def main():
             await collector.run_continuous()
             
     except KeyboardInterrupt:
-        logger.info("\nInterrumpido por usuario")
+        logger.info("\nInterrupted by user")
     except Exception as e:
-        logger.error(f"Error fatal: {e}", exc_info=True)
+        logger.error(f"Fatal error: {e}", exc_info=True)
     finally:
         collector.cleanup()
 

@@ -676,6 +676,64 @@ LIMIT 100;
 
 ## Troubleshooting
 
+### Error: Grafana cannot connect to MySQL - "dial tcp permission denied"
+
+```
+query error err="dial tcp 127.0.0.1:3306: connect: permission denied"
+```
+
+**This is the most common issue in RHEL/CentOS environments with SELinux enabled.**
+
+**Root Cause:**  
+SELinux (Security-Enhanced Linux) blocks Grafana from making TCP connections to MySQL, even on localhost.
+
+**Solution:**
+
+1. **Verify SELinux is the issue:**
+   ```bash
+   sudo ausearch -m avc -ts recent | grep grafana
+   ```
+   If you see lines with `tclass=tcp_socket permissive=0`, SELinux is blocking the connection.
+
+2. **Allow Grafana to connect to databases (RECOMMENDED):**
+   ```bash
+   sudo setsebool -P httpd_can_network_connect_db 1
+   sudo systemctl restart grafana-server
+   ```
+   The `-P` flag makes this change permanent across reboots.
+
+3. **Verify the setting:**
+   ```bash
+   getsebool httpd_can_network_connect_db
+   ```
+   Should return: `httpd_can_network_connect_db --> on`
+
+4. **Test Grafana datasource:**
+   - Go to Grafana → Configuration → Data sources
+   - Click on your MySQL datasource
+   - Click "Save & Test"
+   - Should now show "Database Connection OK"
+
+**Alternative (if above doesn't work):**
+
+Temporarily disable SELinux to confirm it's the issue:
+```bash
+sudo setenforce 0  # Set SELinux to permissive mode
+sudo systemctl restart grafana-server
+```
+
+If this works, then apply the permanent fix above and re-enable SELinux:
+```bash
+sudo setsebool -P httpd_can_network_connect_db 1
+sudo setenforce 1  # Re-enable SELinux in enforcing mode
+```
+
+**Important Notes:**
+- DO NOT leave SELinux disabled in production environments
+- Always use the `setsebool` command to properly configure SELinux policies
+- This issue only affects RHEL/CentOS/Fedora with SELinux enabled
+- Ubuntu/Debian systems use AppArmor instead and typically don't have this issue
+
 ### Error: Cannot connect to MySQL
 
 ```
@@ -688,12 +746,69 @@ Error connecting to MySQL: (2003, "Can't connect to MySQL server...")
    sudo systemctl status mysqld  # RHEL/CentOS
    sudo systemctl status mysql   # Ubuntu
    ```
-2. Check credentials in `config/config.yaml`
-3. Verify user exists and has permissions:
-   ```sql
-   SHOW GRANTS FOR 'snapmirror_user'@'localhost';
+2. Verify MySQL is listening on port 3306:
+   ```bash
+   sudo netstat -tulnp | grep 3306
+   # or
+   sudo ss -tulnp | grep 3306
    ```
-4. Verify firewall/ports (3306)
+   Should show: `LISTEN` on `127.0.0.1:3306` or `0.0.0.0:3306`
+   
+3. If MySQL is not listening, check bind-address in configuration:
+   ```bash
+   sudo grep bind-address /etc/my.cnf /etc/mysql/my.cnf /etc/mysql/mysql.conf.d/mysqld.cnf
+   ```
+   Should be: `bind-address = 127.0.0.1` or `bind-address = 0.0.0.0`
+   
+4. Check credentials in `config/config.yaml`
+5. Verify user exists and has permissions:
+   ```sql
+   SHOW GRANTS FOR 'snap_user'@'localhost';
+   SHOW GRANTS FOR 'snap_user'@'127.0.0.1';
+   ```
+
+### Error: MySQL user doesn't exist
+
+```
+Access denied for user 'snap_user'@'localhost'
+```
+
+**Solution:**
+Create the user with proper permissions:
+
+```sql
+# Connect as root
+mysql -u root -p
+
+# Create user for localhost
+CREATE USER IF NOT EXISTS 'snap_user'@'localhost' IDENTIFIED BY 'Netapp1!';
+GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snap_user'@'localhost';
+
+# Also create for 127.0.0.1 (some systems need both)
+CREATE USER IF NOT EXISTS 'snap_user'@'127.0.0.1' IDENTIFIED BY 'Netapp1!';
+GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snap_user'@'127.0.0.1';
+
+FLUSH PRIVILEGES;
+```
+
+### Error: Database tables don't exist
+
+```
+Table 'snapmirror_monitoring.snapmirror_status_current' doesn't exist
+```
+
+**Solution:**
+Load the database schema:
+
+```bash
+mysql -u root -p snapmirror_monitoring < config/mysql_schema.sql
+```
+
+If you get duplicate index errors, drop and recreate:
+```bash
+mysql -u root -p -e "DROP DATABASE IF EXISTS snapmirror_monitoring; CREATE DATABASE snapmirror_monitoring;"
+mysql -u root -p snapmirror_monitoring < config/mysql_schema.sql
+```
 
 ### Error: ONTAP Timeout
 

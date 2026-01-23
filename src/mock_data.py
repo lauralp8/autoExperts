@@ -1,6 +1,6 @@
 """
-Generador de datos simulados (MOCK) para pruebas
-Simula 1400 instancias ONTAP Select con relaciones SnapMirror
+Mock data generator for testing
+Simulates 1400 ONTAP Select instances with SnapMirror relationships
 """
 
 import random
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class MockDataGenerator:
-    """Genera datos simulados de ONTAP Select y SnapMirror"""
+    """Generates mock data for ONTAP Select and SnapMirror"""
     
     # Coordenadas de ciudades españolas para distribución realista
     SPANISH_CITIES = [
@@ -44,30 +44,30 @@ class MockDataGenerator:
     
     def __init__(self, num_instances: int = 100, relationships_per_instance: int = 3):
         """
-        Inicializa el generador
+        Initialize the generator
         
         Args:
-            num_instances: Número de instancias ONTAP Select a simular
-            relationships_per_instance: Número promedio de relaciones por instancia
+            num_instances: Number of ONTAP Select instances to simulate
+            relationships_per_instance: Average number of relationships per instance
         """
         self.num_instances = num_instances
         self.relationships_per_instance = relationships_per_instance
-        random.seed(42)  # Para reproducibilidad
+        random.seed(42)  # For reproducibility
     
     def generate_instances(self) -> List[Dict]:
         """
-        Genera instancias ONTAP Select simuladas
+        Generate simulated ONTAP Select instances
         
         Returns:
-            Lista de diccionarios con datos de instancias
+            List of dictionaries with instance data
         """
         instances = []
         
         for i in range(1, self.num_instances + 1):
-            # Seleccionar ciudad aleatoria
+            # Select random city
             city, lat, lon = random.choice(self.SPANISH_CITIES)
             
-            # Añadir variación a las coordenadas (simular múltiples sitios por ciudad)
+            # Add variation to coordinates (simulate multiple sites per city)
             lat_offset = random.uniform(-0.5, 0.5)
             lon_offset = random.uniform(-0.5, 0.5)
             
@@ -79,59 +79,59 @@ class MockDataGenerator:
                 'location_name': f'{city} - Sitio {i % 10 + 1}',
                 'cluster_uuid': f'uuid-{i:04d}-{random.randint(1000, 9999)}',
                 'username': 'admin',
-                'password': 'NetApp123'  # En producción, usar vault
+                'password': 'NetApp123'  # In production, use vault
             }
             
             instances.append(instance)
         
-        logger.info(f"Generadas {len(instances)} instancias simuladas")
+        logger.info(f"Generated {len(instances)} simulated instances")
         return instances
     
     def generate_snapmirror_relationships(self, simulate_lag: float = 0.3, 
                                          simulate_errors: float = 0.05) -> List[Dict]:
         """
-        Genera relaciones SnapMirror simuladas con lag realista
+        Generate simulated SnapMirror relationships with realistic lag
         
         Args:
-            simulate_lag: Probabilidad de que una relación tenga lag (0.0-1.0)
-            simulate_errors: Probabilidad de errores (0.0-1.0)
+            simulate_lag: Probability that a relationship has lag (0.0-1.0)
+            simulate_errors: Probability of errors (0.0-1.0)
             
         Returns:
-            Lista de diccionarios con relaciones SnapMirror
+            List of dictionaries with SnapMirror relationships
         """
         relationships = []
         
         for i in range(self.relationships_per_instance):
-            # Determinar estado
+            # Determine state
             has_lag = random.random() < simulate_lag
             has_error = random.random() < simulate_errors
             
-            # Generar lag realista
+            # Generate realistic lag
             if has_error:
-                lag_seconds = random.randint(7200, 86400)  # 2-24 horas (error grave)
+                lag_seconds = random.randint(7200, 86400)  # 2-24 hours (severe error)
                 state = random.choice(["broken-off", "uninitialized"])
                 healthy = False
                 transfer_state = "failed"
             elif has_lag:
-                # Distribución realista de lags
+                # Realistic lag distribution
                 lag_type = random.random()
                 if lag_type < 0.5:
                     lag_seconds = random.randint(900, 3600)  # 15min - 1h (warning)
                 elif lag_type < 0.8:
                     lag_seconds = random.randint(3600, 7200)  # 1-2h (critical)
                 else:
-                    lag_seconds = random.randint(7200, 14400)  # 2-4h (muy critical)
+                    lag_seconds = random.randint(7200, 14400)  # 2-4h (very critical)
                 
                 state = "snapmirrored"
                 healthy = True
                 transfer_state = random.choice(["idle", "transferring"])
             else:
-                lag_seconds = random.randint(0, 600)  # 0-10 minutos (OK)
+                lag_seconds = random.randint(0, 600)  # 0-10 minutes (OK)
                 state = "snapmirrored"
                 healthy = True
                 transfer_state = "success"
             
-            # Crear relación
+            # Create relationship
             relationship = {
                 'uuid': f'rel-uuid-{i}-{random.randint(10000, 99999)}',
                 'source_path': f'svm{random.randint(1, 10)}:vol_source_{random.randint(1, 100)}',
@@ -152,36 +152,36 @@ class MockDataGenerator:
                              warning_threshold: int = 900, 
                              critical_threshold: int = 3600) -> Tuple[str, str]:
         """
-        Calcula el nivel de alerta basado en lag y salud
+        Calculate alert level based on lag and health
         
         Args:
-            lag_seconds: Lag en segundos
-            healthy: Estado de salud
-            warning_threshold: Umbral de warning en segundos
-            critical_threshold: Umbral de critical en segundos
+            lag_seconds: Lag in seconds
+            healthy: Health status
+            warning_threshold: Warning threshold in seconds
+            critical_threshold: Critical threshold in seconds
             
         Returns:
-            Tupla (alert_level, error_message)
+            Tuple (alert_level, error_message)
         """
         if not healthy:
-            return ('error', 'Relación SnapMirror no saludable')
+            return ('error', 'SnapMirror relationship not healthy')
         
         if lag_seconds >= critical_threshold:
-            return ('critical', f'Lag crítico: {lag_seconds // 60} minutos')
+            return ('critical', f'Critical lag: {lag_seconds // 60} minutes')
         elif lag_seconds >= warning_threshold:
-            return ('warning', f'Lag elevado: {lag_seconds // 60} minutos')
+            return ('warning', f'Elevated lag: {lag_seconds // 60} minutes')
         else:
             return ('ok', None)
     
     def generate_mock_response(self, instance_name: str) -> Dict:
         """
-        Genera una respuesta completa simulada para una instancia
+        Generate a complete simulated response for an instance
         
         Args:
-            instance_name: Nombre de la instancia
+            instance_name: Instance name
             
         Returns:
-            Diccionario con cluster_info y relationships
+            Dictionary with cluster_info and relationships
         """
         cluster_info = {
             'uuid': f'cluster-{random.randint(1000, 9999)}',
@@ -198,17 +198,17 @@ class MockDataGenerator:
         }
 
 
-# Funciones de utilidad
+# Utility functions
 def generate_csv_instances(num_instances: int = 100, output_file: str = None) -> str:
     """
-    Genera un CSV con instancias para configuración
+    Generate a CSV with instances for configuration
     
     Args:
-        num_instances: Número de instancias
-        output_file: Ruta del archivo de salida (opcional)
+        num_instances: Number of instances
+        output_file: Output file path (optional)
         
     Returns:
-        String con contenido CSV
+        String with CSV content
     """
     generator = MockDataGenerator(num_instances)
     instances = generator.generate_instances()
@@ -225,25 +225,25 @@ def generate_csv_instances(num_instances: int = 100, output_file: str = None) ->
     if output_file:
         with open(output_file, 'w') as f:
             f.write(csv_content)
-        logger.info(f"CSV generado en {output_file}")
+        logger.info(f"CSV generated in {output_file}")
     
     return csv_content
 
 
 if __name__ == "__main__":
-    # Test del generador
+    # Generator test
     logging.basicConfig(level=logging.INFO)
     
     gen = MockDataGenerator(num_instances=10)
     instances = gen.generate_instances()
     
-    print(f"\n=== {len(instances)} Instancias Generadas ===")
+    print(f"\n=== {len(instances)} Generated Instances ===")
     for inst in instances[:3]:
         print(f"{inst['name']} - {inst['location_name']} ({inst['latitude']}, {inst['longitude']})")
     
-    print(f"\n=== Relaciones SnapMirror de Ejemplo ===")
+    print(f"\n=== Sample SnapMirror Relationships ===")
     rels = gen.generate_snapmirror_relationships()
     for rel in rels:
         alert, msg = gen.calculate_alert_level(rel['lag_seconds'], rel['healthy'])
         print(f"{rel['source_path']} -> {rel['destination_path']}")
-        print(f"  Lag: {rel['lag_seconds']}s, Estado: {rel['state']}, Alerta: {alert}")
+        print(f"  Lag: {rel['lag_seconds']}s, State: {rel['state']}, Alert: {alert}")

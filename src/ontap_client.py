@@ -1,6 +1,6 @@
 """
-Cliente REST API para NetApp ONTAP 9.12+
-Solo operaciones de lectura (GET) para SnapMirror relationships
+REST API client for NetApp ONTAP 9.12+
+Read-only operations (GET) for SnapMirror relationships
 """
 
 import requests
@@ -9,24 +9,24 @@ from typing import Dict, List, Optional
 from requests.auth import HTTPBasicAuth
 import urllib3
 
-# Deshabilitar warnings de SSL (solo para entornos de desarrollo/prueba)
+# Disable SSL warnings (only for development/test environments)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
 
 class ONTAPClient:
-    """Cliente para interactuar con ONTAP REST API"""
+    """Client to interact with ONTAP REST API"""
     
     def __init__(self, host: str, username: str, password: str, verify_ssl: bool = False):
         """
-        Inicializa el cliente ONTAP
+        Initialize the ONTAP client
         
         Args:
-            host: IP o hostname del cluster ONTAP
-            username: Usuario con permisos de lectura
-            password: Contraseña
-            verify_ssl: Verificar certificados SSL (False para dev)
+            host: IP or hostname of the ONTAP cluster
+            username: User with read permissions
+            password: Password
+            verify_ssl: Verify SSL certificates (False for dev)
         """
         self.host = host
         self.base_url = f"https://{host}/api"
@@ -41,14 +41,14 @@ class ONTAPClient:
     
     def _get(self, endpoint: str, params: Optional[Dict] = None) -> Dict:
         """
-        Ejecuta un GET request al API de ONTAP
+        Execute a GET request to the ONTAP API
         
         Args:
-            endpoint: Endpoint del API (ej: /snapmirror/relationships)
-            params: Parámetros query opcionales
+            endpoint: API endpoint (e.g.: /snapmirror/relationships)
+            params: Optional query parameters
             
         Returns:
-            Diccionario con la respuesta JSON
+            Dictionary with JSON response
         """
         url = f"{self.base_url}{endpoint}"
         
@@ -65,24 +65,24 @@ class ONTAPClient:
             return response.json()
             
         except requests.exceptions.Timeout:
-            logger.error(f"Timeout conectando a {self.host}")
+            logger.error(f"Timeout connecting to {self.host}")
             raise
         except requests.exceptions.ConnectionError:
-            logger.error(f"Error de conexión a {self.host}")
+            logger.error(f"Connection error to {self.host}")
             raise
         except requests.exceptions.HTTPError as e:
-            logger.error(f"HTTP Error en {self.host}: {e}")
+            logger.error(f"HTTP Error on {self.host}: {e}")
             raise
         except Exception as e:
-            logger.error(f"Error inesperado en {self.host}: {e}")
+            logger.error(f"Unexpected error on {self.host}: {e}")
             raise
     
     def get_cluster_info(self) -> Dict:
         """
-        Obtiene información básica del cluster
+        Get basic cluster information
         
         Returns:
-            Diccionario con info del cluster (uuid, nombre, versión)
+            Dictionary with cluster info (uuid, name, version)
         """
         try:
             data = self._get("/cluster")
@@ -92,18 +92,18 @@ class ONTAPClient:
                 'version': data.get('version', {}).get('full', 'unknown')
             }
         except Exception as e:
-            logger.error(f"Error obteniendo info de cluster {self.host}: {e}")
+            logger.error(f"Error getting cluster info from {self.host}: {e}")
             return {'uuid': None, 'name': None, 'version': None, 'error': str(e)}
     
     def get_snapmirror_relationships(self) -> List[Dict]:
         """
-        Obtiene todas las relaciones SnapMirror del cluster
+        Get all SnapMirror relationships from the cluster
         
         Returns:
-            Lista de diccionarios con información de cada relación
+            List of dictionaries with information for each relationship
         """
         try:
-            # Query con campos específicos para obtener lag_time
+            # Query with specific fields to get lag_time
             params = {
                 'fields': 'uuid,source.path,destination.path,policy.name,state,healthy,lag_time,transfer.state,transfer.end_time',
                 'return_records': 'true',
@@ -114,11 +114,11 @@ class ONTAPClient:
             
             relationships = []
             for record in data.get('records', []):
-                # Parsear lag_time (viene en formato ISO 8601 duration: PT1H30M)
+                # Parse lag_time (comes in ISO 8601 duration format: PT1H30M)
                 lag_time_str = record.get('lag_time', 'PT0S')
                 lag_seconds = self._parse_iso_duration(lag_time_str) if lag_time_str else 0
                 
-                # Extraer datos con manejo robusto de campos opcionales
+                # Extract data with robust handling of optional fields
                 source_info = record.get('source', {})
                 dest_info = record.get('destination', {})
                 policy_info = record.get('policy', {})
@@ -137,49 +137,49 @@ class ONTAPClient:
                 }
                 relationships.append(rel_info)
             
-            logger.info(f"Obtenidas {len(relationships)} relaciones de {self.host}")
+            logger.info(f"Obtained {len(relationships)} relationships from {self.host}")
             return relationships
             
         except Exception as e:
-            logger.error(f"Error obteniendo relaciones SnapMirror de {self.host}: {e}")
+            logger.error(f"Error getting SnapMirror relationships from {self.host}: {e}")
             return []
     
     @staticmethod
     def _parse_iso_duration(duration_str: str) -> int:
         """
-        Convierte ISO 8601 duration a segundos
-        Ejemplo: PT1H30M45S -> 5445 segundos
+        Convert ISO 8601 duration to seconds
+        Example: PT1H30M45S -> 5445 seconds
         
         Args:
-            duration_str: String en formato ISO 8601 (PT...)
+            duration_str: String in ISO 8601 format (PT...)
             
         Returns:
-            Segundos totales
+            Total seconds
         """
         if not duration_str or duration_str == 'PT0S':
             return 0
         
         try:
-            # Remover 'PT' del inicio
+            # Remove 'PT' from the beginning
             duration_str = duration_str.replace('PT', '')
             
             hours = 0
             minutes = 0
             seconds = 0
             
-            # Parsear horas
+            # Parse hours
             if 'H' in duration_str:
                 parts = duration_str.split('H')
                 hours = int(parts[0])
                 duration_str = parts[1] if len(parts) > 1 else ''
             
-            # Parsear minutos
+            # Parse minutes
             if 'M' in duration_str:
                 parts = duration_str.split('M')
                 minutes = int(parts[0]) if parts[0] else 0
                 duration_str = parts[1] if len(parts) > 1 else ''
             
-            # Parsear segundos
+            # Parse seconds
             if 'S' in duration_str:
                 seconds = int(duration_str.replace('S', ''))
             
@@ -187,20 +187,20 @@ class ONTAPClient:
             return total_seconds
             
         except Exception as e:
-            logger.warning(f"Error parseando duration {duration_str}: {e}")
+            logger.warning(f"Error parsing duration {duration_str}: {e}")
             return 0
     
     def test_connection(self) -> bool:
         """
-        Prueba la conexión al cluster ONTAP
+        Test the connection to the ONTAP cluster
         
         Returns:
-            True si la conexión es exitosa
+            True if connection is successful
         """
         try:
             info = self.get_cluster_info()
             if info.get('uuid'):
-                logger.info(f"Conexión exitosa a {self.host} - Cluster: {info.get('name')}")
+                logger.info(f"Successful connection to {self.host} - Cluster: {info.get('name')}")
                 return True
             return False
         except Exception:
