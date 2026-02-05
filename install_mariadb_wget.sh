@@ -29,7 +29,7 @@ echo ""
 
 # URLs de MariaDB 10.11 para RHEL 9
 MARIADB_VERSION="10.11.10"
-BASE_URL="https://archive.mariadb.org/mariadb-${MARIADB_VERSION}/yum/rhel/9/x86_64"
+BASE_URL="https://yum.mariadb.org/${MARIADB_VERSION}/rhel/9/x86_64/rpms"
 
 # Lista de RPMs necesarios
 RPMS=(
