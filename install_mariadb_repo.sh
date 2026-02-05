@@ -47,41 +47,44 @@ TMPDIR="/tmp/mariadb_install_$$"
 mkdir -p $TMPDIR
 cd $TMPDIR
 
-# Descargar RPMs directamente
-BASE_URL="https://rpm.mariadb.org/10.11/rhel/${RHEL_VERSION}/x86_64"
+# URLs directas de MariaDB 10.11.10 para RHEL 9
+BASE_URL="https://dlm.mariadb.com/3788713/MariaDB/mariadb-10.11.10/yum/rhel/9/x86_64"
 
-echo "Descargando desde: $BASE_URL"
+COMMON_RPM="MariaDB-common-10.11.10-1.el9.x86_64.rpm"
+COMPAT_RPM="MariaDB-compat-10.11.10-1.el9.x86_64.rpm"
+CLIENT_RPM="MariaDB-client-10.11.10-1.el9.x86_64.rpm"
+SERVER_RPM="MariaDB-server-10.11.10-1.el9.x86_64.rpm"
 
-# Obtener lista de RPMs disponibles y descargar los necesarios
-wget -q "${BASE_URL}/" -O index.html
+echo "Descargando desde: ${BASE_URL}/"
 
-# Buscar los últimos RPMs
-COMMON_RPM=$(grep -o 'MariaDB-common-[0-9.]*-[0-9].el9.x86_64.rpm' index.html | sort -V | tail -1)
-COMPAT_RPM=$(grep -o 'MariaDB-compat-[0-9.]*-[0-9].el9.x86_64.rpm' index.html | sort -V | tail -1)
-CLIENT_RPM=$(grep -o 'MariaDB-client-[0-9.]*-[0-9].el9.x86_64.rpm' index.html | sort -V | tail -1)
-SERVER_RPM=$(grep -o 'MariaDB-server-[0-9.]*-[0-9].el9.x86_64.rpm' index.html | sort -V | tail -1)
+echo "  → ${COMMON_RPM}"
+wget -q "${BASE_URL}/${COMMON_RPM}" || { echo "Error descargando"; exit 1; }
 
-echo "  → $COMMON_RPM"
-wget -q "${BASE_URL}/${COMMON_RPM}"
+echo "  → ${COMPAT_RPM}"
+wget -q "${BASE_URL}/${COMPAT_RPM}" || { echo "Error descargando"; exit 1; }
 
-echo "  → $COMPAT_RPM"
-wget -q "${BASE_URL}/${COMPAT_RPM}"
+echo "  → ${CLIENT_RPM}"
+wget -q "${BASE_URL}/${CLIENT_RPM}" || { echo "Error descargando"; exit 1; }
 
-echo "  → $CLIENT_RPM"
-wget -q "${BASE_URL}/${CLIENT_RPM}"
-
-echo "  → $SERVER_RPM"
-wget -q "${BASE_URL}/${SERVER_RPM}"
+echo "  → ${SERVER_RPM}"
+wget -q "${BASE_URL}/${SERVER_RPM}" || { echo "Error descargando"; exit 1; }
 
 echo ""
 echo "[3/4] Instalando RPMs (sin verificar dependencias)..."
 echo ""
 
 # Instalar en orden correcto con --nodeps
-rpm -ivh $COMMON_RPM --nodeps --force 2>/dev/null || echo "  → common instalado"
-rpm -ivh $COMPAT_RPM --nodeps --force 2>/dev/null || echo "  → compat instalado"
-rpm -ivh $CLIENT_RPM --nodeps 2>/dev/null || echo "  → client instalado"
-rpm -ivh $SERVER_RPM --nodeps 2>/dev/null || echo "  → server instalado"
+echo "  → Instalando common..."
+rpm -ivh ${COMMON_RPM} --nodeps --force || true
+
+echo "  → Instalando compat..."
+rpm -ivh ${COMPAT_RPM} --nodeps --force || true
+
+echo "  → Instalando client..."
+rpm -ivh ${CLIENT_RPM} --nodeps || true
+
+echo "  → Instalando server..."
+rpm -ivh ${SERVER_RPM} --nodeps || true
 
 # Limpiar
 cd /
