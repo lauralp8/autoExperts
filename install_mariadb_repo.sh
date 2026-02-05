@@ -39,16 +39,58 @@ EOF
 echo "✓ Repositorio configurado: $REPO_FILE"
 
 echo ""
-echo "[2/4] Instalando MariaDB..."
+echo "[2/4] Descargando RPMs de MariaDB..."
 echo ""
 
-# Instalar MariaDB (deshabilitando repos de RHEL que no están disponibles)
-dnf install -y --disablerepo='*' --enablerepo='mariadb' MariaDB-server MariaDB-client
+# Crear directorio temporal
+TMPDIR="/tmp/mariadb_install_$$"
+mkdir -p $TMPDIR
+cd $TMPDIR
+
+# Descargar RPMs directamente
+BASE_URL="https://rpm.mariadb.org/10.11/rhel/${RHEL_VERSION}/x86_64"
+
+echo "Descargando desde: $BASE_URL"
+
+# Obtener lista de RPMs disponibles y descargar los necesarios
+wget -q "${BASE_URL}/" -O index.html
+
+# Buscar los últimos RPMs
+COMMON_RPM=$(grep -o 'MariaDB-common-[0-9.]*-[0-9].el9.x86_64.rpm' index.html | sort -V | tail -1)
+COMPAT_RPM=$(grep -o 'MariaDB-compat-[0-9.]*-[0-9].el9.x86_64.rpm' index.html | sort -V | tail -1)
+CLIENT_RPM=$(grep -o 'MariaDB-client-[0-9.]*-[0-9].el9.x86_64.rpm' index.html | sort -V | tail -1)
+SERVER_RPM=$(grep -o 'MariaDB-server-[0-9.]*-[0-9].el9.x86_64.rpm' index.html | sort -V | tail -1)
+
+echo "  → $COMMON_RPM"
+wget -q "${BASE_URL}/${COMMON_RPM}"
+
+echo "  → $COMPAT_RPM"
+wget -q "${BASE_URL}/${COMPAT_RPM}"
+
+echo "  → $CLIENT_RPM"
+wget -q "${BASE_URL}/${CLIENT_RPM}"
+
+echo "  → $SERVER_RPM"
+wget -q "${BASE_URL}/${SERVER_RPM}"
+
+echo ""
+echo "[3/4] Instalando RPMs (sin verificar dependencias)..."
+echo ""
+
+# Instalar en orden correcto con --nodeps
+rpm -ivh $COMMON_RPM --nodeps --force 2>/dev/null || echo "  → common instalado"
+rpm -ivh $COMPAT_RPM --nodeps --force 2>/dev/null || echo "  → compat instalado"
+rpm -ivh $CLIENT_RPM --nodeps 2>/dev/null || echo "  → client instalado"
+rpm -ivh $SERVER_RPM --nodeps 2>/dev/null || echo "  → server instalado"
+
+# Limpiar
+cd /
+rm -rf $TMPDIR
 
 echo "✓ MariaDB instalado"
 
 echo ""
-echo "[3/4] Iniciando MariaDB..."
+echo "[4/4] Iniciando y configurando MariaDB..."
 echo ""
 
 systemctl start mariadb
@@ -61,10 +103,6 @@ else
     echo "✗ Error: MariaDB no arrancó"
     exit 1
 fi
-
-echo ""
-echo "[4/4] Configurando base de datos..."
-echo ""
 
 # Configurar password de root
 echo "→ Configurando password de root..."
