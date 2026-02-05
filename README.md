@@ -63,6 +63,7 @@ discover_ontap_clusters.py    # Descubrimiento interactivo
 remove_instance.py            # Gestión de instancias (alta/baja)
 check_setup.py                # Verificación de configuración
 test_mysql_connection.py      # Test de conexión MySQL
+quick_mysql_setup.sh          # Setup rápido de MySQL (si ya instalado)
 install_mysql_manual.sh       # Instalación manual de MySQL/MariaDB
 collector.service             # Servicio systemd
 setup_lab.sh                  # Setup automatizado
@@ -92,7 +93,11 @@ El script instala todo automáticamente.
 
 **Si el script falla al instalar MySQL:**
 ```bash
-# Instalar MariaDB manualmente
+# Opción A - Setup rápido (si MariaDB ya está instalado)
+chmod +x quick_mysql_setup.sh
+sudo ./quick_mysql_setup.sh
+
+# Opción B - Instalación completa de MariaDB
 chmod +x install_mysql_manual.sh
 sudo ./install_mysql_manual.sh
 ```
@@ -379,14 +384,21 @@ sudo tail -f /var/log/grafana/grafana.log
 
 Si el setup automático falla al instalar o configurar MySQL:
 
-**Opción A - Script de instalación manual (RECOMENDADO):**
+**Opción A - Setup rápido (si MariaDB ya está instalado pero no configurado):**
+```bash
+chmod +x quick_mysql_setup.sh
+sudo ./quick_mysql_setup.sh
+```
+Este script inicia MariaDB, crea la base de datos, el usuario y carga el schema. **No pregunta nada, solo configura.**
+
+**Opción B - Instalación completa (si MariaDB no está instalado o no funciona):**
 ```bash
 chmod +x install_mysql_manual.sh
 sudo ./install_mysql_manual.sh
 ```
-Este script instala MariaDB, crea la base de datos, el usuario y carga el schema automáticamente.
+Este script detecta si MariaDB está instalado. Si está, solo lo configura. Si no, lo instala primero.
 
-**Opción B - Instalación manual paso a paso:**
+**Opción C - Instalación manual paso a paso:**
 
 ```bash
 # 1. Instalar MariaDB
