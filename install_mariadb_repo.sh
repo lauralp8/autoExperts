@@ -42,8 +42,8 @@ echo ""
 echo "[2/4] Instalando MariaDB..."
 echo ""
 
-# Instalar MariaDB
-dnf install -y MariaDB-server MariaDB-client
+# Instalar MariaDB (deshabilitando repos de RHEL que no están disponibles)
+dnf install -y --disablerepo='*' --enablerepo='mariadb' MariaDB-server MariaDB-client
 
 echo "✓ MariaDB instalado"
 
