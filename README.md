@@ -63,6 +63,7 @@ discover_ontap_clusters.py    # Descubrimiento interactivo
 remove_instance.py            # Gestión de instancias (alta/baja)
 check_setup.py                # Verificación de configuración
 test_mysql_connection.py      # Test de conexión MySQL
+install_mysql_manual.sh       # Instalación manual de MySQL/MariaDB
 collector.service             # Servicio systemd
 setup_lab.sh                  # Setup automatizado
 ```
@@ -88,6 +89,13 @@ chmod +x setup_lab.sh
 ```
 
 El script instala todo automáticamente.
+
+**Si el script falla al instalar MySQL:**
+```bash
+# Instalar MariaDB manualmente
+chmod +x install_mysql_manual.sh
+sudo ./install_mysql_manual.sh
+```
 
 **Verificar instalación:**
 ```bash
@@ -367,30 +375,60 @@ sudo journalctl -u grafana-server -n 50 --no-pager
 sudo tail -f /var/log/grafana/grafana.log
 ```
 
-### Error: "No se crearon las tablas esperadas"
+### Error: "No se crearon las tablas esperadas" o MySQL no se instaló
 
-Si el setup automático falla al crear la base de datos:
+Si el setup automático falla al instalar o configurar MySQL:
+
+**Opción A - Script de instalación manual (RECOMENDADO):**
+```bash
+chmod +x install_mysql_manual.sh
+sudo ./install_mysql_manual.sh
+```
+Este script instala MariaDB, crea la base de datos, el usuario y carga el schema automáticamente.
+
+**Opción B - Instalación manual paso a paso:**
 
 ```bash
-# 1. Verificar que MySQL está corriendo
-sudo systemctl status mysqld
+# 1. Instalar MariaDB
+sudo dnf install -y mariadb-server mariadb
+# o en Ubuntu: sudo apt install -y mariadb-server
 
-# 2. Crear base de datos manualmente
-mysql -u root -p
+# 2. Iniciar servicio
+sudo systemctl start mariadb
+sudo systemctl enable mariadb
+sudo systemctl status mariadb
 
-# 3. Dentro de MySQL, ejecutar:
+# 3. Verificar que MySQL está corriendo
+sudo systemctl status mariadb
+
+# 4. Configurar password de root (si es necesario)
+sudo mysql -u root
+
+# 5. Dentro de MySQL, ejecutar:
+ALTER USER 'root'@'localhost' IDENTIFIED BY 'NetApp123!';
+FLUSH PRIVILEGES;
+EXIT;
+
+# 6. Crear base de datos y usuario
+mysql -u root -pNetApp123!
+```
+```sql
 CREATE DATABASE snapmirror_monitoring;
 CREATE USER 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';
 GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
+```
 
-# 4. Cargar el schema
+```bash
+# 7. Cargar el schema
 mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring < config/mysql_schema.sql
 
-# 5. Verificar que se crearon las tablas
+# 8. Verificar que se crearon las tablas
 mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SHOW TABLES;"
 ```
+
+Deberías ver 4 tablas: `ontap_instances`, `snapmirror_relationships`, `snapmirror_status_current`, `snapmirror_status_history`
 
 ### Error: "Connection refused" al ejecutar collector
 
