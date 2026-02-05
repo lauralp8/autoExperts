@@ -52,27 +52,28 @@ COMPAT_RPM="MariaDB-compat-10.11.10-1.el9.x86_64.rpm"
 CLIENT_RPM="MariaDB-client-10.11.10-1.el9.x86_64.rpm"
 SERVER_RPM="MariaDB-server-10.11.10-1.el9.x86_64.rpm"
 
-# Lista de mirrors a probar (en orden de preferencia)
-MIRRORS=(
-    "https://mirror.rackspace.com/mariadb/mariadb-10.11.10/yum/rhel9-amd64"
-    "https://mirrors.xtom.de/mariadb/mariadb-10.11.10/yum/rhel9-amd64"
-    "https://ftp.nluug.nl/db/mariadb/mariadb-10.11.10/yum/rhel9-amd64"
-    "https://mirror.23m.com/mariadb/mariadb-10.11.10/yum/rhel9-amd64"
-)
-
-# Función para descargar con múltiples intentos
+# Función para descargar con múltiples intentos (URLs completas y correctas)
 download_file() {
     local file=$1
     local success=0
     
-    for mirror in "${MIRRORS[@]}"; do
-        echo "  → Probando: $mirror"
-        if curl -f -L -o "$file" "${mirror}/rpms/${file}" 2>/dev/null; then
-            echo "    ✓ Descargado desde $mirror"
+    # Lista de URLs completas a probar (estructura correcta de directorios)
+    local URLS=(
+        "https://ftp.osuosl.org/pub/mariadb/mariadb-10.11.10/yum/rhel/9/x86_64/rpms/${file}"
+        "https://mirror.23m.com/mariadb/mariadb-10.11.10/yum/rhel/9/x86_64/rpms/${file}"
+        "https://mirrors.xtom.de/mariadb/mariadb-10.11.10/yum/rhel/9/x86_64/rpms/${file}"
+        "https://archive.mariadb.org/mariadb-10.11.10/yum/rhel/9/x86_64/rpms/${file}"
+        "https://mirror.raiolanetworks.com/mariadb/mariadb-10.11.10/yum/rhel/9/x86_64/rpms/${file}"
+    )
+    
+    for url in "${URLS[@]}"; do
+        echo "  → Probando: $(echo $url | cut -d'/' -f3)"
+        if curl -f -L -o "$file" "$url" 2>/dev/null; then
+            echo "    ✓ Descargado desde $(echo $url | cut -d'/' -f3)"
             success=1
             break
-        elif wget -q -O "$file" "${mirror}/rpms/${file}" 2>/dev/null; then
-            echo "    ✓ Descargado desde $mirror"
+        elif wget -q -O "$file" "$url" 2>/dev/null; then
+            echo "    ✓ Descargado desde $(echo $url | cut -d'/' -f3)"
             success=1
             break
         else
