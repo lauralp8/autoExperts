@@ -63,10 +63,7 @@ discover_ontap_clusters.py    # Descubrimiento interactivo
 remove_instance.py            # Gestión de instancias (alta/baja)
 check_setup.py                # Verificación de configuración
 test_mysql_connection.py      # Test de conexión MySQL
-install_mariadb_repo.sh       # Instalación MariaDB desde repo oficial (RECOMENDADO)
-install_mariadb_wget.sh       # Instalación MariaDB con wget (alternativa)
-quick_mysql_setup.sh          # Setup rápido de MySQL (si ya instalado)
-install_mysql_manual.sh       # Instalación manual de MySQL/MariaDB
+install_mysql_community.sh    # Instalación MySQL Community 8.0 (RECOMENDADO)
 collector.service             # Servicio systemd
 setup_lab.sh                  # Setup automatizado
 ```
@@ -95,18 +92,12 @@ El script instala todo automáticamente.
 
 **Si el script falla al instalar MySQL:**
 ```bash
-# MÉTODO 1 - Repositorio MariaDB oficial (RECOMENDADO)
-chmod +x install_mariadb_repo.sh
-sudo ./install_mariadb_repo.sh
-
-# MÉTODO 2 - Setup rápido (si MariaDB ya está instalado)
-chmod +x quick_mysql_setup.sh
-sudo ./quick_mysql_setup.sh
-
-# MÉTODO 3 - Instalación manual desde repos RHEL (requiere suscripción)
-chmod +x install_mysql_manual.sh
-sudo ./install_mysql_manual.sh
+# Instalación MySQL Community 8.0
+chmod +x install_mysql_community.sh
+sudo ./install_mysql_community.sh
 ```
+
+Este script descarga e instala MySQL 8.0 directamente desde Oracle, configura la base de datos, crea el usuario y carga el schema automáticamente.
 
 **Verificar instalación:**
 ```bash
@@ -114,6 +105,21 @@ python3 check_setup.py
 ```
 
 Este script verifica que todos los componentes estén correctamente configurados.
+
+**Cargar schema y generar datos de prueba:**
+```bash
+# Cargar schema de base de datos
+mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring < config/mysql_schema.sql
+
+# Generar datos mock para testing
+python3 generate_mock_csv.py --num-instances 100
+
+# Ejecutar collector en modo mock (una vez)
+python3 run_collector.py --mode mock --once
+
+# Verificar que hay datos
+python3 check_setup.py
+```
 
 ### Setup manual
 
@@ -390,41 +396,27 @@ sudo tail -f /var/log/grafana/grafana.log
 
 Si el setup automático falla al instalar o configurar MySQL:
 
-**Opción A - Instalación con repositorio oficial (RECOMENDADO):**
+**Opción A - Instalación MySQL Community 8.0 (RECOMENDADO para RHEL sin suscripción):**
 ```bash
-chmod +x install_mariadb_repo.sh
-sudo ./install_mariadb_repo.sh
+chmod +x install_mysql_community.sh
+sudo ./install_mysql_community.sh
 ```
-Este script configura el repositorio oficial de MariaDB y usa `dnf install` para instalar MariaDB 10.11 LTS. Funciona incluso en RHEL sin suscripción porque usa repos externos.
+Este script descarga MySQL 8.0 directamente desde Oracle, no requiere suscripción RHEL, y configura todo automáticamente (base de datos, usuario, schema).
 
-**Opción B - Setup rápido (si MariaDB ya está instalado pero no configurado):**
-```bash
-chmod +x quick_mysql_setup.sh
-sudo ./quick_mysql_setup.sh
-```
-Este script inicia MariaDB, crea la base de datos, el usuario y carga el schema. **No pregunta nada, solo configura.**
-
-**Opción C - Instalación desde repos (requiere sistema RHEL registrado):**
-```bash
-chmod +x install_mysql_manual.sh
-sudo ./install_mysql_manual.sh
-```
-Este script detecta si MariaDB está instalado. Si está, solo lo configura. Si no, lo instala primero.
-
-**Opción D - Instalación manual paso a paso:**
+**Opción B - Instalación manual paso a paso:**
 
 ```bash
-# 1. Instalar MariaDB
-sudo dnf install -y mariadb-server mariadb
-# o en Ubuntu: sudo apt install -y mariadb-server
+# 1. Instalar MySQL (requiere suscripción RHEL o usar install_mysql_community.sh)
+sudo dnf install -y mysql-server mysql
+# o en Ubuntu: sudo apt install -y mysql-server
 
 # 2. Iniciar servicio
-sudo systemctl start mariadb
-sudo systemctl enable mariadb
-sudo systemctl status mariadb
+sudo systemctl start mysqld
+sudo systemctl enable mysqld
+sudo systemctl status mysqld
 
 # 3. Verificar que MySQL está corriendo
-sudo systemctl status mariadb
+sudo systemctl status mysqld
 
 # 4. Configurar password de root (si es necesario)
 sudo mysql -u root
