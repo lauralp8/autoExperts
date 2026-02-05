@@ -47,27 +47,27 @@ TMPDIR="/tmp/mariadb_install_$$"
 mkdir -p $TMPDIR
 cd $TMPDIR
 
-# URLs directas de MariaDB 10.11.10 para RHEL 9
-BASE_URL="https://dlm.mariadb.com/3788713/MariaDB/mariadb-10.11.10/yum/rhel/9/x86_64"
+# Usar mirror de la universidad de Santiago de Compostela (muy estable)
+BASE_URL="https://ftp.tu-chemnitz.de/pub/mariadb/mariadb-10.11.10/yum/rhel/9/x86_64"
 
 COMMON_RPM="MariaDB-common-10.11.10-1.el9.x86_64.rpm"
-COMPAT_RPM="MariaDB-compat-10.11.10-1.el9.x86_64.rpm"
+COMPAT_RPM="MariaDB-compat-10.11.10-1.el9.x86_64.rpm"  
 CLIENT_RPM="MariaDB-client-10.11.10-1.el9.x86_64.rpm"
 SERVER_RPM="MariaDB-server-10.11.10-1.el9.x86_64.rpm"
 
-echo "Descargando desde: ${BASE_URL}/"
+echo "Descargando desde mirror alemán..."
 
 echo "  → ${COMMON_RPM}"
-wget -q "${BASE_URL}/${COMMON_RPM}" || { echo "Error descargando"; exit 1; }
+curl -sS -L -o ${COMMON_RPM} "${BASE_URL}/${COMMON_RPM}" || wget -q "${BASE_URL}/${COMMON_RPM}" || { echo "Error descargando"; exit 1; }
 
 echo "  → ${COMPAT_RPM}"
-wget -q "${BASE_URL}/${COMPAT_RPM}" || { echo "Error descargando"; exit 1; }
+curl -sS -L -o ${COMPAT_RPM} "${BASE_URL}/${COMPAT_RPM}" || wget -q "${BASE_URL}/${COMPAT_RPM}" || { echo "Error descargando"; exit 1; }
 
 echo "  → ${CLIENT_RPM}"
-wget -q "${BASE_URL}/${CLIENT_RPM}" || { echo "Error descargando"; exit 1; }
+curl -sS -L -o ${CLIENT_RPM} "${BASE_URL}/${CLIENT_RPM}" || wget -q "${BASE_URL}/${CLIENT_RPM}" || { echo "Error descargando"; exit 1; }
 
 echo "  → ${SERVER_RPM}"
-wget -q "${BASE_URL}/${SERVER_RPM}" || { echo "Error descargando"; exit 1; }
+curl -sS -L -o ${SERVER_RPM} "${BASE_URL}/${SERVER_RPM}" || wget -q "${BASE_URL}/${SERVER_RPM}" || { echo "Error descargando"; exit 1; }
 
 echo ""
 echo "[3/4] Instalando RPMs (sin verificar dependencias)..."
