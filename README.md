@@ -63,6 +63,7 @@ discover_ontap_clusters.py    # Descubrimiento interactivo
 remove_instance.py            # Gestión de instancias (alta/baja)
 check_setup.py                # Verificación de configuración
 test_mysql_connection.py      # Test de conexión MySQL
+install_mariadb_wget.sh       # Instalación MariaDB con wget (RHEL sin suscripción)
 quick_mysql_setup.sh          # Setup rápido de MySQL (si ya instalado)
 install_mysql_manual.sh       # Instalación manual de MySQL/MariaDB
 collector.service             # Servicio systemd
@@ -93,11 +94,15 @@ El script instala todo automáticamente.
 
 **Si el script falla al instalar MySQL:**
 ```bash
-# Opción A - Setup rápido (si MariaDB ya está instalado)
+# MÉTODO 1 - wget (para RHEL sin suscripción) - RECOMENDADO
+chmod +x install_mariadb_wget.sh
+sudo ./install_mariadb_wget.sh
+
+# MÉTODO 2 - Setup rápido (si MariaDB ya está instalado)
 chmod +x quick_mysql_setup.sh
 sudo ./quick_mysql_setup.sh
 
-# Opción B - Instalación completa de MariaDB
+# MÉTODO 3 - Instalación desde repos (requiere RHEL registrado)
 chmod +x install_mysql_manual.sh
 sudo ./install_mysql_manual.sh
 ```
@@ -384,21 +389,28 @@ sudo tail -f /var/log/grafana/grafana.log
 
 Si el setup automático falla al instalar o configurar MySQL:
 
-**Opción A - Setup rápido (si MariaDB ya está instalado pero no configurado):**
+**Opción A - Instalación con wget (RECOMENDADO para RHEL sin suscripción):**
+```bash
+chmod +x install_mariadb_wget.sh
+sudo ./install_mariadb_wget.sh
+```
+Este script descarga MariaDB con wget desde el repositorio oficial y lo instala sin necesidad de suscripción RHEL.
+
+**Opción B - Setup rápido (si MariaDB ya está instalado pero no configurado):**
 ```bash
 chmod +x quick_mysql_setup.sh
 sudo ./quick_mysql_setup.sh
 ```
 Este script inicia MariaDB, crea la base de datos, el usuario y carga el schema. **No pregunta nada, solo configura.**
 
-**Opción B - Instalación completa (si MariaDB no está instalado o no funciona):**
+**Opción C - Instalación desde repos (requiere sistema RHEL registrado):**
 ```bash
 chmod +x install_mysql_manual.sh
 sudo ./install_mysql_manual.sh
 ```
 Este script detecta si MariaDB está instalado. Si está, solo lo configura. Si no, lo instala primero.
 
-**Opción C - Instalación manual paso a paso:**
+**Opción D - Instalación manual paso a paso:**
 
 ```bash
 # 1. Instalar MariaDB
