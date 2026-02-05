@@ -63,7 +63,8 @@ discover_ontap_clusters.py    # Descubrimiento interactivo
 remove_instance.py            # Gestión de instancias (alta/baja)
 check_setup.py                # Verificación de configuración
 test_mysql_connection.py      # Test de conexión MySQL
-install_mariadb_wget.sh       # Instalación MariaDB con wget (RHEL sin suscripción)
+install_mariadb_repo.sh       # Instalación MariaDB desde repo oficial (RECOMENDADO)
+install_mariadb_wget.sh       # Instalación MariaDB con wget (alternativa)
 quick_mysql_setup.sh          # Setup rápido de MySQL (si ya instalado)
 install_mysql_manual.sh       # Instalación manual de MySQL/MariaDB
 collector.service             # Servicio systemd
@@ -94,15 +95,15 @@ El script instala todo automáticamente.
 
 **Si el script falla al instalar MySQL:**
 ```bash
-# MÉTODO 1 - wget (para RHEL sin suscripción) - RECOMENDADO
-chmod +x install_mariadb_wget.sh
-sudo ./install_mariadb_wget.sh
+# MÉTODO 1 - Repositorio MariaDB oficial (RECOMENDADO)
+chmod +x install_mariadb_repo.sh
+sudo ./install_mariadb_repo.sh
 
 # MÉTODO 2 - Setup rápido (si MariaDB ya está instalado)
 chmod +x quick_mysql_setup.sh
 sudo ./quick_mysql_setup.sh
 
-# MÉTODO 3 - Instalación desde repos (requiere RHEL registrado)
+# MÉTODO 3 - Instalación manual desde repos RHEL (requiere suscripción)
 chmod +x install_mysql_manual.sh
 sudo ./install_mysql_manual.sh
 ```
@@ -389,12 +390,12 @@ sudo tail -f /var/log/grafana/grafana.log
 
 Si el setup automático falla al instalar o configurar MySQL:
 
-**Opción A - Instalación con wget (RECOMENDADO para RHEL sin suscripción):**
+**Opción A - Instalación con repositorio oficial (RECOMENDADO):**
 ```bash
-chmod +x install_mariadb_wget.sh
-sudo ./install_mariadb_wget.sh
+chmod +x install_mariadb_repo.sh
+sudo ./install_mariadb_repo.sh
 ```
-Este script descarga MariaDB con wget desde el repositorio oficial y lo instala sin necesidad de suscripción RHEL.
+Este script configura el repositorio oficial de MariaDB y usa `dnf install` para instalar MariaDB 10.11 LTS. Funciona incluso en RHEL sin suscripción porque usa repos externos.
 
 **Opción B - Setup rápido (si MariaDB ya está instalado pero no configurado):**
 ```bash
