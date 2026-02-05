@@ -49,6 +49,8 @@
 | Archivo | Función |
 |---------|---------|
 | `run_collector.py` | **Script principal** - Punto de entrada, parsea argumentos, arranca el collector |
+| `check_setup.py` | **Verificación** - Comprueba que todo esté configurado correctamente |
+| `remove_instance.py` | **Gestión de instancias** - Alta/baja de clusters ONTAP |
 | `src/collector.py` | **Lógica principal** - Lee CSV, coordina recolección escalonada, calcula alertas |
 | `src/ontap_client.py` | **Cliente REST API** - Habla con ONTAP (`/api/snapmirror/relationships`) |
 | `src/database.py` | **Operaciones MySQL** - Insert, update, queries a la base de datos |
@@ -200,6 +202,42 @@ Por cada cluster:
 
 ## 6. Cómo llegan los datos a Grafana
 
+### Configuración del Datasource MySQL
+
+**Paso 1:** Acceder a Grafana
+- URL: `http://localhost:3000`
+- Usuario: `admin`
+- Password: `admin` (cambiar en primer login)
+
+**Paso 2:** Añadir datasource
+```
+Configuration (⚙️) → Data sources → Add data source → MySQL
+```
+
+**Paso 3:** Configurar conexión
+```
+Name: SnapMirror DB
+Host: localhost:3306
+Database: snapmirror_monitoring
+User: snapmirror_user
+Password: SnapMirror123!
+
+Session timezone: (dejar vacío)
+Max open connections: 100
+Max idle connections: 2
+Max connection lifetime: 14400
+
+[Save & test]  ← Debe mostrar "Database Connection OK"
+```
+
+**Paso 4:** Importar dashboard
+```
+Dashboards (☰) → Import → Upload JSON file
+  → Seleccionar: grafana/snapmirror_dashboard.json
+  → Select a datasource: SnapMirror DB
+  → [Import]
+```
+
 ### Conexión
 
 Grafana tiene configurado un **datasource MySQL** apuntando a:
@@ -288,6 +326,19 @@ python remove_instance.py --ip "192.168.1.100" --delete
 | Grafana | 10.0+ |
 | SO | RHEL/Ubuntu/Windows |
 
+### Credenciales y configuración por defecto
+
+| Parámetro | Valor | Ubicación |
+|-----------|-------|-----------|
+| **Base de datos** | `snapmirror_monitoring` | `config/config.yaml` |
+| **Usuario MySQL** | `snapmirror_user` | `config/config.yaml` |
+| **Password MySQL** | `SnapMirror123!` | `config/config.yaml` |
+| **Host MySQL** | `localhost` | `config/config.yaml` |
+| **Puerto MySQL** | `3306` | `config/config.yaml` |
+| **Grafana URL** | `http://localhost:3000` | - |
+| **Grafana user** | `admin` | Por defecto |
+| **Grafana pass** | `admin` | Por defecto |
+
 ### Dependencias Python
 
 ```
@@ -325,7 +376,49 @@ sudo cp collector.service /etc/systemd/system/
 sudo systemctl enable collector
 sudo systemctl start collector
 ```
+### Script de verificación
 
+Antes de ejecutar el collector, verifica que todo esté configurado:
+
+```bash
+python check_setup.py
+```
+
+Este script comprueba:
+- ✓ Archivos requeridos existen
+- ✓ config.yaml es válido
+- ✓ Dependencias Python instaladas
+- ✓ MySQL acepta conexiones
+- ✓ Tablas creadas correctamente
+- ✓ Grafana está accesible
+
+Salida de ejemplo:
+```
+╔══════════════════════════════════════════════════════════╗
+║   SnapMirror Monitor - Verificación de Configuración    ║
+╚══════════════════════════════════════════════════════════╝
+
+============================================================
+  Verificando archivos requeridos
+============================================================
+
+✓ Archivo de configuración: config/config.yaml
+✓ Schema de MySQL: config/mysql_schema.sql
+✓ Collector principal: src/collector.py
+...
+
+============================================================
+  Resumen
+============================================================
+
+✓ Archivos requeridos
+✓ Configuración
+✓ Dependencias Python
+✓ Base de datos MySQL
+✓ Grafana
+
+✓ SISTEMA LISTO
+```
 ### Verificar funcionamiento
 
 ```bash

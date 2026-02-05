@@ -54,9 +54,14 @@ src/
 grafana/
   snapmirror_dashboard.json   # Dashboard pre-configurado
 
+docs/
+  GUIA_OPERACION.md          # Guía completa de operación
+
 run_collector.py              # Script principal
 init_database.py              # Inicialización de BD
 discover_ontap_clusters.py    # Descubrimiento interactivo
+remove_instance.py            # Gestión de instancias (alta/baja)
+check_setup.py                # Verificación de configuración
 collector.service             # Servicio systemd
 setup_lab.sh                  # Setup automatizado
 ```
@@ -83,6 +88,13 @@ chmod +x setup_lab.sh
 
 El script instala todo automáticamente.
 
+**Verificar instalación:**
+```bash
+python3 check_setup.py
+```
+
+Este script verifica que todos los componentes estén correctamente configurados.
+
 ### Setup manual
 
 **1. Instalar dependencias Python:**
@@ -108,6 +120,8 @@ Te guía paso a paso para añadir clusters, probar conexión, y descubrir relaci
 Opción B - Modo mock (para testing):
 ```bash
 python3 generate_mock_csv.py --num-instances 100
+# Nota: Genera 'config/ontap_instances_mock.csv'
+# Renombrar a 'ontap_instances.csv' o actualizar config.yaml
 ```
 
 Opción C - Editar CSV manualmente:
@@ -118,10 +132,50 @@ cluster1,192.168.0.101,40.4165,-3.7038,Madrid,admin,Netapp1!
 
 **4. Configurar Grafana:**
 
-- Añadir datasource MySQL apuntando a la BD
-- Importar `grafana/snapmirror_dashboard.json`
+Acceder a Grafana (http://localhost:3000 - user: admin / pass: admin)
+
+**a) Añadir datasource MySQL:**
+```
+Configuración > Data sources > Add data source > MySQL
+
+Configuraciones:
+  Name: SnapMirror DB
+  Host: localhost:3306        (o 127.0.0.1:3306 si da error)
+  Database: snapmirror_monitoring
+  User: snapmirror_user
+  Password: SnapMirror123!
+  
+  Session timezone: (dejar vacío)
+  
+  ⚠️ IMPORTANTE: NO marcar "TLS/SSL" a menos que MySQL tenga SSL configurado
+  
+  [Save & Test]  ← Debe mostrar "Database Connection OK"
+```
+
+Si aparece error "failed to connect to server", ver sección Troubleshooting.
+
+**b) Importar dashboard:**
+```bash
+Dashboards > Import > Upload JSON file
+  → Seleccionar: grafana/snapmirror_dashboard.json
+  → Elegir datasource: SnapMirror DB
+  → Import
+```
 
 ## Uso
+
+### Scripts útiles
+
+| Script | Descripción | Ejemplo |
+|--------|-------------|---------|
+| `run_collector.py` | Script principal del collector | `python3 run_collector.py --mode mock --once` |
+| `check_setup.py` | Verificar configuración completa | `python3 check_setup.py` |
+| `remove_instance.py` | Gestionar instancias (baja/alta) | `python3 remove_instance.py --list` |
+| `generate_mock_csv.py` | Generar datos de prueba | `python3 generate_mock_csv.py --num-instances 100` |
+| `discover_ontap_clusters.py` | Descubrir clusters interactivamente | `python3 discover_ontap_clusters.py` |
+| `init_database.py` | Inicializar base de datos | `python3 init_database.py` |
+
+### Ejecución del collector
 
 **Test rápido con datos simulados:**
 ```bash
@@ -157,14 +211,34 @@ sudo journalctl -u collector -f
 
 ## Configuración
 
-El archivo `config/config.yaml` tiene todo:
+### Valores por defecto (Referencia Rápida)
+
+| Parámetro | Valor | Ubicación |
+|-----------|-------|----------|
+| **Base de datos** | `snapmirror_monitoring` | `config/config.yaml` |
+| **Usuario MySQL** | `snapmirror_user` | `config/config.yaml` |
+| **Password MySQL** | `SnapMirror123!` | `config/config.yaml` |
+| **Host MySQL** | `localhost` | `config/config.yaml` |
+| **Puerto MySQL** | `3306` | `config/config.yaml` |
+| **Grafana URL** | `http://localhost:3000` | - |
+| **Grafana user** | `admin` | Por defecto |
+| **Grafana pass** | `admin` | Por defecto |
+| **CSV instancias** | `config/ontap_instances.csv` | - |
+| **Intervalo colección** | `300s` (5 min) | `config/config.yaml` |
+| **Threshold Warning** | `900s` (15 min) | `config/config.yaml` |
+| **Threshold Critical** | `3600s` (60 min) | `config/config.yaml` |
+
+### Archivo config/config.yaml
+
+Todos los parámetros se configuran en `config/config.yaml`:
 
 ```yaml
 database:
   host: localhost
+  port: 3306
   user: snapmirror_user
   password: SnapMirror123!
-  database: snapmirror_monitoring
+  database: snapmirror_monitoring  # ← Nombre de la base de datos
 
 collector:
   mode: real  # real o mock
@@ -178,6 +252,8 @@ thresholds:
 ```
 
 ## Dashboard de Grafana
+
+**IMPORTANTE:** Asegúrate de configurar el datasource MySQL primero (ver sección Instalación paso 4).
 
 El dashboard tiene:
 
@@ -210,6 +286,119 @@ Con 1400 instancias y 0.2s de delay:
 - Se completa antes del siguiente intervalo (5 min)
 
 Si tienes pocos clusters, puedes reducir el delay a 0.1s.
+
+## Troubleshooting
+
+### Error en Grafana: "failed to connect to server" al configurar datasource
+
+Si al configurar el datasource MySQL en Grafana aparece el error `[sqleng.connectionError] failed to connect to server`:
+
+**1. Verificar que MySQL está corriendo:**
+```bash
+sudo systemctl status mysqld
+# o
+sudo systemctl status mariadb
+```
+
+**2. Verificar que la base de datos existe:**
+```bash
+mysql -u root -p -e "SHOW DATABASES LIKE 'snapmirror_monitoring';"
+```
+
+**3. Verificar que el usuario existe y tiene permisos:**
+```bash
+mysql -u root -p
+```
+```sql
+SELECT User, Host FROM mysql.user WHERE User = 'snapmirror_user';
+SHOW GRANTS FOR 'snapmirror_user'@'localhost';
+EXIT;
+```
+
+**4. Probar conexión manualmente:**
+```bash
+mysql -u snapmirror_user -pSnapMirror123! -h localhost snapmirror_monitoring -e "SELECT 1;"
+```
+
+**5. Si el comando anterior falla, recrear el usuario:**
+```bash
+mysql -u root -p
+```
+```sql
+DROP USER IF EXISTS 'snapmirror_user'@'localhost';
+CREATE USER 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';
+GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+**6. Configuración del datasource en Grafana:**
+
+Asegúrate de usar estas configuraciones exactas:
+```
+Host: localhost:3306  (o 127.0.0.1:3306 si localhost no funciona)
+Database: snapmirror_monitoring
+User: snapmirror_user
+Password: SnapMirror123!
+
+⚠️ IMPORTANTE: NO marcar "Use TLS" a menos que MySQL esté configurado con SSL
+```
+
+**7. Si MySQL escucha solo en 127.0.0.1:**
+
+En el datasource de Grafana, cambiar:
+- De: `localhost:3306`
+- A: `127.0.0.1:3306`
+
+**8. Verificar logs de Grafana:**
+```bash
+sudo journalctl -u grafana-server -n 50 --no-pager
+# o
+sudo tail -f /var/log/grafana/grafana.log
+```
+
+### Error: "No se crearon las tablas esperadas"
+
+Si el setup automático falla al crear la base de datos:
+
+```bash
+# 1. Verificar que MySQL está corriendo
+sudo systemctl status mysqld
+
+# 2. Crear base de datos manualmente
+mysql -u root -p
+
+# 3. Dentro de MySQL, ejecutar:
+CREATE DATABASE snapmirror_monitoring;
+CREATE USER 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';
+GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+
+# 4. Cargar el schema
+mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring < config/mysql_schema.sql
+
+# 5. Verificar que se crearon las tablas
+mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SHOW TABLES;"
+```
+
+### Error: "Connection refused" al ejecutar collector
+
+Verificar que MySQL está corriendo y acepta conexiones:
+```bash
+sudo systemctl status mysqld
+mysql -u snapmirror_user -pSnapMirror123! -e "SELECT 1;"
+```
+
+### CSV de instancias no encontrado
+
+Si usaste `generate_mock_csv.py`, el archivo se crea como `ontap_instances_mock.csv`:
+```bash
+cd config/
+mv ontap_instances_mock.csv ontap_instances.csv
+```
+
+O editar `config.yaml` para apuntar al archivo correcto.
 
 ## Notas
 
