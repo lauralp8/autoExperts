@@ -47,27 +47,61 @@ TMPDIR="/tmp/mariadb_install_$$"
 mkdir -p $TMPDIR
 cd $TMPDIR
 
-# Usar mirror de la universidad de Santiago de Compostela (muy estable)
-BASE_URL="https://ftp.tu-chemnitz.de/pub/mariadb/mariadb-10.11.10/yum/rhel/9/x86_64"
-
 COMMON_RPM="MariaDB-common-10.11.10-1.el9.x86_64.rpm"
 COMPAT_RPM="MariaDB-compat-10.11.10-1.el9.x86_64.rpm"  
 CLIENT_RPM="MariaDB-client-10.11.10-1.el9.x86_64.rpm"
 SERVER_RPM="MariaDB-server-10.11.10-1.el9.x86_64.rpm"
 
-echo "Descargando desde mirror alemán..."
+# Lista de mirrors a probar (en orden de preferencia)
+MIRRORS=(
+    "https://mirror.rackspace.com/mariadb/mariadb-10.11.10/yum/rhel9-amd64"
+    "https://mirrors.xtom.de/mariadb/mariadb-10.11.10/yum/rhel9-amd64"
+    "https://ftp.nluug.nl/db/mariadb/mariadb-10.11.10/yum/rhel9-amd64"
+    "https://mirror.23m.com/mariadb/mariadb-10.11.10/yum/rhel9-amd64"
+)
 
-echo "  → ${COMMON_RPM}"
-curl -sS -L -o ${COMMON_RPM} "${BASE_URL}/${COMMON_RPM}" || wget -q "${BASE_URL}/${COMMON_RPM}" || { echo "Error descargando"; exit 1; }
+# Función para descargar con múltiples intentos
+download_file() {
+    local file=$1
+    local success=0
+    
+    for mirror in "${MIRRORS[@]}"; do
+        echo "  → Probando: $mirror"
+        if curl -f -L -o "$file" "${mirror}/rpms/${file}" 2>/dev/null; then
+            echo "    ✓ Descargado desde $mirror"
+            success=1
+            break
+        elif wget -q -O "$file" "${mirror}/rpms/${file}" 2>/dev/null; then
+            echo "    ✓ Descargado desde $mirror"
+            success=1
+            break
+        else
+            echo "    ✗ Fallo, probando siguiente mirror..."
+            rm -f "$file"
+        fi
+    done
+    
+    if [ $success -eq 0 ]; then
+        echo "    ✗ ERROR: No se pudo descargar $file desde ningún mirror"
+        return 1
+    fi
+    return 0
+}
 
-echo "  → ${COMPAT_RPM}"
-curl -sS -L -o ${COMPAT_RPM} "${BASE_URL}/${COMPAT_RPM}" || wget -q "${BASE_URL}/${COMPAT_RPM}" || { echo "Error descargando"; exit 1; }
+echo "→ Descargando ${COMMON_RPM}..."
+download_file "${COMMON_RPM}" || exit 1
 
-echo "  → ${CLIENT_RPM}"
-curl -sS -L -o ${CLIENT_RPM} "${BASE_URL}/${CLIENT_RPM}" || wget -q "${BASE_URL}/${CLIENT_RPM}" || { echo "Error descargando"; exit 1; }
+echo ""
+echo "→ Descargando ${COMPAT_RPM}..."
+download_file "${COMPAT_RPM}" || exit 1
 
-echo "  → ${SERVER_RPM}"
-curl -sS -L -o ${SERVER_RPM} "${BASE_URL}/${SERVER_RPM}" || wget -q "${BASE_URL}/${SERVER_RPM}" || { echo "Error descargando"; exit 1; }
+echo ""
+echo "→ Descargando ${CLIENT_RPM}..."
+download_file "${CLIENT_RPM}" || exit 1
+
+echo ""
+echo "→ Descargando ${SERVER_RPM}..."
+download_file "${SERVER_RPM}" || exit 1
 
 echo ""
 echo "[3/4] Instalando RPMs (sin verificar dependencias)..."
