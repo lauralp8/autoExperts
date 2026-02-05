@@ -62,6 +62,7 @@ init_database.py              # Inicialización de BD
 discover_ontap_clusters.py    # Descubrimiento interactivo
 remove_instance.py            # Gestión de instancias (alta/baja)
 check_setup.py                # Verificación de configuración
+test_mysql_connection.py      # Test de conexión MySQL
 collector.service             # Servicio systemd
 setup_lab.sh                  # Setup automatizado
 ```
@@ -170,6 +171,7 @@ Dashboards > Import > Upload JSON file
 |--------|-------------|---------|
 | `run_collector.py` | Script principal del collector | `python3 run_collector.py --mode mock --once` |
 | `check_setup.py` | Verificar configuración completa | `python3 check_setup.py` |
+| `test_mysql_connection.py` | Probar conexión a MySQL (troubleshooting) | `python3 test_mysql_connection.py` |
 | `remove_instance.py` | Gestionar instancias (baja/alta) | `python3 remove_instance.py --list` |
 | `generate_mock_csv.py` | Generar datos de prueba | `python3 generate_mock_csv.py --num-instances 100` |
 | `discover_ontap_clusters.py` | Descubrir clusters interactivamente | `python3 discover_ontap_clusters.py` |
@@ -292,6 +294,14 @@ Si tienes pocos clusters, puedes reducir el delay a 0.1s.
 ### Error en Grafana: "failed to connect to server" al configurar datasource
 
 Si al configurar el datasource MySQL en Grafana aparece el error `[sqleng.connectionError] failed to connect to server`:
+
+**🔍 Diagnóstico rápido:**
+```bash
+python3 test_mysql_connection.py
+```
+Este script te dirá exactamente qué configuración usar en Grafana.
+
+**Soluciones paso a paso:**
 
 **1. Verificar que MySQL está corriendo:**
 ```bash
