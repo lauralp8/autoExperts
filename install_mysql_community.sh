@@ -27,8 +27,8 @@ TMPDIR="/tmp/mysql_install_$$"
 mkdir -p $TMPDIR
 cd $TMPDIR
 
-# MySQL Community 8.0 para RHEL 9
-MYSQL_REPO_RPM="mysql80-community-release-el9-1.noarch.rpm"
+# MySQL Community 8.0 para RHEL (versión dinámica)
+MYSQL_REPO_RPM="mysql80-community-release-el${RHEL_VERSION}-1.noarch.rpm"
 MYSQL_REPO_URL="https://dev.mysql.com/get/${MYSQL_REPO_RPM}"
 
 echo "→ Descargando repositorio MySQL..."
@@ -56,17 +56,17 @@ echo ""
 # Descargar solo los RPMs esenciales (sin usar dnf install)
 cd $TMPDIR
 
-# URLs directas del repositorio MySQL
-BASE_URL="https://repo.mysql.com/yum/mysql-8.0-community/el/9/x86_64"
+# URLs directas del repositorio MySQL con versión dinámica
+BASE_URL="https://repo.mysql.com/yum/mysql-8.0-community/el/${RHEL_VERSION}/x86_64"
 
 # Lista de paquetes a descargar (orden correcto)
 PACKAGES=(
-    "mysql-community-common-8.0.40-1.el9.x86_64.rpm"
-    "mysql-community-client-plugins-8.0.40-1.el9.x86_64.rpm"
-    "mysql-community-libs-8.0.40-1.el9.x86_64.rpm"
-    "mysql-community-client-8.0.40-1.el9.x86_64.rpm"
-    "mysql-community-icu-data-files-8.0.40-1.el9.x86_64.rpm"
-    "mysql-community-server-8.0.40-1.el9.x86_64.rpm"
+    "mysql-community-common-8.0.40-1.el${RHEL_VERSION}.x86_64.rpm"
+    "mysql-community-client-plugins-8.0.40-1.el${RHEL_VERSION}.x86_64.rpm"
+    "mysql-community-libs-8.0.40-1.el${RHEL_VERSION}.x86_64.rpm"
+    "mysql-community-client-8.0.40-1.el${RHEL_VERSION}.x86_64.rpm"
+    "mysql-community-icu-data-files-8.0.40-1.el${RHEL_VERSION}.x86_64.rpm"
+    "mysql-community-server-8.0.40-1.el${RHEL_VERSION}.x86_64.rpm"
 )
 
 echo "Descargando paquetes MySQL..."
