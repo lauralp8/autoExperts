@@ -46,95 +46,60 @@ else
 fi
 
 # =====================================================
-# 3. INSTALAR MARIADB (desde RPM directo)
+# 3. INSTALAR MYSQL COMMUNITY 8.0
 # =====================================================
 echo ""
-echo "[3/6] Instalando MariaDB..."
+echo "[3/6] Instalando MySQL Community 8.0..."
 
-if rpm -q mariadb-server &>/dev/null; then
-    echo "✓ MariaDB ya instalado"
-    systemctl start mariadb 2>/dev/null || true
-    systemctl enable mariadb 2>/dev/null || true
+# Verificar si MySQL ya está instalado
+if rpm -q mysql-community-server &>/dev/null || rpm -q mariadb-server &>/dev/null; then
+    echo "✓ MySQL/MariaDB ya instalado"
+    systemctl start mysqld 2>/dev/null || systemctl start mariadb 2>/dev/null || true
+    systemctl enable mysqld 2>/dev/null || systemctl enable mariadb 2>/dev/null || true
 else
-    echo "Descargando MySQL Community Server desde Oracle..."
-    
-    # Seleccionar bundle según versión de RHEL
-    MYSQL_BASE_URL="https://dev.mysql.com/get/Downloads/MySQL-8.0"
-    MYSQL_BUNDLE="mysql-8.0.40-1.el${MYSQL_RHEL_VER}.x86_64.rpm-bundle.tar"
-    
-    mkdir -p /tmp/mysql_install
-    cd /tmp/mysql_install
-    
-    echo "  - Descargando MySQL bundle para RHEL ${MYSQL_RHEL_VER} (puede tardar un minuto)..."
-    wget "${MYSQL_BASE_URL}/${MYSQL_BUNDLE}" -O mysql-bundle.tar
-    
-    if [ -f "mysql-bundle.tar" ]; then
-        echo "  - Extrayendo RPMs..."
-        tar -xf mysql-bundle.tar
+    # Usar el script de instalación dedicado si existe
+    if [ -f "install_mysql_community.sh" ]; then
+        echo "Usando script de instalación MySQL Community..."
+        chmod +x install_mysql_community.sh
+        ./install_mysql_community.sh
         
-        echo "  - Instalando MySQL para RHEL ${MYSQL_RHEL_VER}..."
-        # Instalar en orden: common -> libs -> client -> server (solo paquetes principales, no debuginfo)
-        rpm -ivh --nodeps mysql-community-common-8.0.40-1.el${MYSQL_RHEL_VER}.x86_64.rpm
-        rpm -ivh --nodeps mysql-community-client-plugins-8.0.40-1.el${MYSQL_RHEL_VER}.x86_64.rpm
-        rpm -ivh --nodeps mysql-community-libs-8.0.40-1.el${MYSQL_RHEL_VER}.x86_64.rpm
-        rpm -ivh --nodeps mysql-community-client-8.0.40-1.el${MYSQL_RHEL_VER}.x86_64.rpm
-        rpm -ivh --nodeps mysql-community-icu-data-files-8.0.40-1.el${MYSQL_RHEL_VER}.x86_64.rpm
-        rpm -ivh --nodeps mysql-community-server-8.0.40-1.el${MYSQL_RHEL_VER}.x86_64.rpm
-        
-        cd - > /dev/null
-        rm -rf /tmp/mysql_install
-        
-        systemctl daemon-reload
-        systemctl start mysqld
-        systemctl enable mysqld
-        
-        # Obtener contraseña temporal y cambiarla
-        echo "  - Configurando password de root..."
-        TEMP_PASS=$(grep 'temporary password' /var/log/mysqld.log 2>/dev/null | tail -1 | awk '{print $NF}')
-        if [ -n "$TEMP_PASS" ]; then
-            /usr/bin/mysql --connect-expired-password -u root -p"$TEMP_PASS" <<EOF 2>/dev/null
-ALTER USER 'root'@'localhost' IDENTIFIED BY 'NetApp123!';
-FLUSH PRIVILEGES;
-EOF
+        if [ $? -eq 0 ]; then
+            echo "✓ MySQL instalado correctamente"
         else
-            # Si no hay password temporal, MySQL está recién instalado sin inicializar
-            echo "  - Inicializando MySQL sin password temporal..."
+            echo "❌ Error instalando MySQL"
+            exit 1
         fi
-        
-        echo "✓ MySQL instalado y arrancado"
     else
-        cd - > /dev/null
-        rm -rf /tmp/mysql_install
-        echo "❌ Error descargando MySQL"
+        echo "❌ Script install_mysql_community.sh no encontrado"
+        echo "   Ejecuta manualmente: chmod +x install_mysql_community.sh && sudo ./install_mysql_community.sh"
         exit 1
     fi
 fi
 
-# Configurar MySQL/MariaDB
-echo "  ⚙ Configurando base de datos y usuario..."
+# Verificar que MySQL esté corriendo
+echo "  ⚙ Verificando MySQL..."
+sleep 2
 
-# Esperar a que MySQL esté listo
-sleep 3
-
-# Crear base de datos y usuario
-if /usr/bin/mysql -u root -pNetApp123! <<EOF 2>/dev/null
+if systemctl is-active --quiet mysqld || systemctl is-active --quiet mariadb; then
+    echo "✓ MySQL corriendo"
+    
+    # Verificar si la base de datos ya existe (el script install_mysql_community.sh ya la crea)
+    DB_EXISTS=$(/usr/bin/mysql -u root -pNetApp123! -e "SHOW DATABASES LIKE 'snapmirror_monitoring';" 2>/dev/null | grep -c snapmirror_monitoring)
+    
+    if [ "$DB_EXISTS" -eq 0 ]; then
+        echo "  ⚙ Creando base de datos y usuario..."
+        /usr/bin/mysql -u root -pNetApp123! <<EOF 2>/dev/null
 CREATE DATABASE IF NOT EXISTS snapmirror_monitoring;
 CREATE USER IF NOT EXISTS 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';
 GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';
 FLUSH PRIVILEGES;
 EOF
-then
-    echo "✓ Base de datos y usuario creados"
-elif /usr/bin/mysql -u root <<EOF 2>/dev/null
-CREATE DATABASE IF NOT EXISTS snapmirror_monitoring;
-CREATE USER IF NOT EXISTS 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';
-GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';
-FLUSH PRIVILEGES;
-EOF
-then
-    echo "✓ Base de datos y usuario creados"
+        echo "✓ Base de datos y usuario creados"
+    else
+        echo "✓ Base de datos ya existe"
+    fi
 else
-    echo "⚠ Error creando base de datos"
+    echo "⚠ MySQL no está corriendo"
 fi
 
 # =====================================================
@@ -182,8 +147,8 @@ fi
 # =====================================================
 echo ""
 echo "[5/6] Instalando dependencias Python..."
-python3.12 -m pip install --upgrade pip --quiet --no-warn-script-location 2>/dev/null || true
-python3.12 -m pip install netapp-ontap requests PyMySQL PyYAML aiohttp --quiet --no-warn-script-location 2>/dev/null || true
+python3 -m pip install --upgrade pip --quiet --no-warn-script-location 2>/dev/null || true
+python3 -m pip install netapp-ontap requests PyMySQL PyYAML aiohttp --quiet --no-warn-script-location 2>/dev/null || true
 echo "✓ Dependencias Python instaladas"
 
 # =====================================================
@@ -192,24 +157,26 @@ echo "✓ Dependencias Python instaladas"
 echo ""
 echo "[6/6] Inicializando base de datos..."
 
-# Cargar el schema SQL
-if [ -f "config/mysql_schema.sql" ]; then
-    /usr/bin/mysql -u root -pNetApp123! snapmirror_monitoring < config/mysql_schema.sql 2>/dev/null
-    if [ $? -eq 0 ]; then
-        echo "✓ Schema MySQL creado"
-    else
-        echo "⚠ Error cargando schema"
-    fi
-else
-    echo "⚠ Archivo mysql_schema.sql no encontrado"
-fi
+# Verificar si las tablas ya existen
+TABLE_COUNT=$(/usr/bin/mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SHOW TABLES;" 2>/dev/null | wc -l)
 
-# Verificar tablas creadas
-TABLE_COUNT=$(/usr/bin/mysql -u root -pNetApp123! snapmirror_monitoring -e "SHOW TABLES;" 2>/dev/null | wc -l)
 if [ $TABLE_COUNT -gt 1 ]; then
-    echo "✓ Base de datos inicializada con $((TABLE_COUNT - 1)) tablas/vistas"
+    echo "✓ Base de datos ya tiene $((TABLE_COUNT - 1)) tablas"
 else
-    echo "⚠ No se crearon las tablas esperadas"
+    # Cargar el schema SQL si las tablas no existen
+    if [ -f "config/mysql_schema.sql" ]; then
+        echo "  → Cargando schema SQL..."
+        /usr/bin/mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring < config/mysql_schema.sql 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo "✓ Schema MySQL creado"
+            TABLE_COUNT=$(/usr/bin/mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SHOW TABLES;" 2>/dev/null | wc -l)
+            echo "✓ Base de datos inicializada con $((TABLE_COUNT - 1)) tablas"
+        else
+            echo "⚠ Error cargando schema"
+        fi
+    else
+        echo "⚠ Archivo mysql_schema.sql no encontrado"
+    fi
 fi
 
 # Actualizar config.yaml si es necesario
@@ -227,15 +194,17 @@ echo "✓ INSTALACIÓN COMPLETADA"
 echo "========================================="
 echo ""
 echo "Servicios:"
-echo "  • MariaDB (Puerto 3306)"
+echo "  • MySQL Community 8.0 (Puerto 3306)"
 echo "  • Grafana: http://$(hostname -I | awk '{print $1}'):3000"
 echo ""
 echo "Credenciales:"
-echo "  MariaDB: root / $MYSQL_ROOT_PASSWORD"
+echo "  MySQL root: root / $MYSQL_ROOT_PASSWORD"
+echo "  MySQL app: snapmirror_user / $MYSQL_APP_PASSWORD"
 echo "  Grafana: admin / admin"
 echo ""
 echo "Próximos pasos:"
-echo "  python3.12 generate_mock_csv.py --num-instances 50"
-echo "  python3.12 run_collector.py --mode mock --once"
+echo "  1. python3 generate_mock_csv.py --num-instances 50"
+echo "  2. python3 run_collector.py --mode mock --once"
+echo "  3. Configurar Grafana datasource y dashboard"
 echo ""
 echo "¡Listo! 🚀"
