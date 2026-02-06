@@ -1,7 +1,12 @@
 # NetApp SnapMirror Monitor
 
 Monitorización de relaciones SnapMirror en 1400+ instancias ONTAP Select distribuidas geográficamente. Dashboard en Grafana con mapa interactivo y alertas automáticas.
+**📖 [Ver Referencia Rápida](QUICK_REFERENCE.md)** - Comandos útiles, credenciales y troubleshooting
 
+**Credenciales:**
+- MySQL: root / `NetApp123!` | snapmirror_user / `SnapMirror123!`
+- Grafana: admin / admin
+- Base de datos: `snapmirror_monitoring`
 ## Qué hace esto
 
 Este proyecto recolecta el estado de las relaciones SnapMirror de múltiples clusters ONTAP y lo presenta en un dashboard visual de Grafana. Básicamente:
@@ -54,29 +59,33 @@ src/
 grafana/
   snapmirror_dashboard.json   # Dashboard pre-configurado
 
-docs/
-  GUIA_OPERACION.md          # Guía completa de operación
-
 run_collector.py              # Script principal
 init_database.py              # Inicialización de BD
 discover_ontap_clusters.py    # Descubrimiento interactivo
 remove_instance.py            # Gestión de instancias (alta/baja)
 check_setup.py                # Verificación de configuración
 test_mysql_connection.py      # Test de conexión MySQL
-install_mysql_community.sh    # Instalación MySQL Community 8.0 (RECOMENDADO)
+install_mysql_community.sh    # Instalación MySQL Community 8.0
+cleanup_mysql.sh              # Limpieza de instalación MySQL fallida
 collector.service             # Servicio systemd
 setup_lab.sh                  # Setup automatizado
+QUICK_REFERENCE.md            # Referencia rápida de comandos
+README.md                     # Este archivo
 ```
 
 ## Instalación
 
 ### Requisitos
-- Python 3.9+
-- MySQL 8.0+
+- Python 3.6+ (RHEL 8 incluye 3.6.8, RHEL 9 incluye 3.9+)
+- MySQL 8.0 / MariaDB 10.5+
 - Grafana 10.0+
-- RHEL/Ubuntu/Windows
+- RHEL 8/9, Ubuntu 20.04+
 
-### Setup rápido (RHEL)
+**Credenciales por defecto:**
+- MySQL root: `NetApp123!`
+- MySQL app: usuario `snapmirror_user` / password `SnapMirror123!`
+- Base de datos: `snapmirror_monitoring`
+
 
 ### Setup rápido (RHEL)
 
@@ -106,18 +115,20 @@ python3 check_setup.py
 
 Este script verifica que todos los componentes estén correctamente configurados.
 
-**Cargar schema y generar datos de prueba:**
+**Si necesitas cargar el schema manualmente:**
 ```bash
-# Cargar schema de base de datos
 mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring < config/mysql_schema.sql
+```
 
-# Generar datos mock para testing
-python3 generate_mock_csv.py --num-instances 100
+**Generar datos de prueba y ejecutar:**
+```bash
+# 1. Generar datos mock
+python3 generate_mock_csv.py --num-instances 50
 
-# Ejecutar collector en modo mock (una vez)
+# 2. Ejecutar collector una vez (modo mock)
 python3 run_collector.py --mode mock --once
 
-# Verificar que hay datos
+# 3. Verificar instalación completa
 python3 check_setup.py
 ```
 
@@ -130,9 +141,19 @@ pip3 install -r requirements.txt
 
 **2. Configurar MySQL:**
 
-Editar credenciales en `config/config.yaml` y ejecutar:
+Las credenciales ya están configuradas en `config/config.yaml`:
+```yaml
+database:
+  host: localhost
+  port: 3306
+  user: snapmirror_user
+  password: SnapMirror123!
+  database: snapmirror_monitoring
+```
+
+Cargar el schema de base de datos:
 ```bash
-mysql -u root -p < config/mysql_schema.sql
+mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring < config/mysql_schema.sql
 ```
 
 **3. Configurar clusters ONTAP:**
@@ -337,55 +358,45 @@ sudo systemctl status mariadb
 
 **2. Verificar que la base de datos existe:**
 ```bash
-mysql -u root -p -e "SHOW DATABASES LIKE 'snapmirror_monitoring';"
+mysql -u root -pNetApp123! -e "SHOW DATABASES LIKE 'snapmirror_monitoring';"
 ```
 
 **3. Verificar que el usuario existe y tiene permisos:**
 ```bash
-mysql -u root -p
-```
-```sql
-SELECT User, Host FROM mysql.user WHERE User = 'snapmirror_user';
-SHOW GRANTS FOR 'snapmirror_user'@'localhost';
-EXIT;
+mysql -u root -pNetApp123! -e "SELECT User, Host FROM mysql.user WHERE User = 'snapmirror_user';"
+mysql -u root -pNetApp123! -e "SHOW GRANTS FOR 'snapmirror_user'@'localhost';"
 ```
 
-**4. Probar conexión manualmente:**
+**4. Probar conexión con usuario de aplicación:**
 ```bash
-mysql -u snapmirror_user -pSnapMirror123! -h localhost snapmirror_monitoring -e "SELECT 1;"
+mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SELECT 1;"
 ```
 
 **5. Si el comando anterior falla, recrear el usuario:**
 ```bash
-mysql -u root -p
-```
-```sql
+mysql -u root -pNetApp123! <<EOF
 DROP USER IF EXISTS 'snapmirror_user'@'localhost';
 CREATE USER 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';
 GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';
 FLUSH PRIVILEGES;
-EXIT;
+EOF
 ```
 
 **6. Configuración del datasource en Grafana:**
 
-Asegúrate de usar estas configuraciones exactas:
 ```
-Host: localhost:3306  (o 127.0.0.1:3306 si localhost no funciona)
+Name: SnapMirror DB
+Host: localhost:3306
 Database: snapmirror_monitoring
 User: snapmirror_user
 Password: SnapMirror123!
 
-⚠️ IMPORTANTE: NO marcar "Use TLS" a menos que MySQL esté configurado con SSL
+⚠️ IMPORTANTE: NO marcar "TLS/SSL Mode"
 ```
 
-**7. Si MySQL escucha solo en 127.0.0.1:**
+Si da error, prueba cambiar Host a: `127.0.0.1:3306`
 
-En el datasource de Grafana, cambiar:
-- De: `localhost:3306`
-- A: `127.0.0.1:3306`
-
-**8. Verificar logs de Grafana:**
+**7. Verificar logs de Grafana (si hay problemas):**
 ```bash
 sudo journalctl -u grafana-server -n 50 --no-pager
 # o
@@ -418,30 +429,18 @@ sudo systemctl status mysqld
 # 3. Verificar que MySQL está corriendo
 sudo systemctl status mysqld
 
-# 4. Configurar password de root (si es necesario)
-sudo mysql -u root
-
-# 5. Dentro de MySQL, ejecutar:
-ALTER USER 'root'@'localhost' IDENTIFIED BY 'NetApp123!';
-FLUSH PRIVILEGES;
-EXIT;
-
-# 6. Crear base de datos y usuario
-mysql -u root -pNetApp123!
-```
-```sql
-CREATE DATABASE snapmirror_monitoring;
-CREATE USER 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';
+# 4. Configurar password de root y crear base de datos
+mysql -u root -pNetApp123! <<EOF
+CREATE DATABASE IF NOT EXISTS snapmirror_monitoring;
+CREATE USER IF NOT EXISTS 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';
 GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';
 FLUSH PRIVILEGES;
-EXIT;
-```
+EOF
 
-```bash
-# 7. Cargar el schema
+# 5. Cargar el schema
 mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring < config/mysql_schema.sql
 
-# 8. Verificar que se crearon las tablas
+# 6. Verificar que se crearon las tablas
 mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SHOW TABLES;"
 ```
 
