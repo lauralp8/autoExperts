@@ -163,6 +163,24 @@ sudo systemctl stop collector
 sudo journalctl -u collector -f
 ```
 
+## Mantenimiento
+
+```bash
+# Ver estadísticas del histórico
+python3 cleanup_history.py
+
+# Simular limpieza (sin borrar)
+python3 cleanup_history.py --days 30 --dry-run
+
+# Borrar registros > 30 días
+python3 cleanup_history.py --days 30
+
+# Mantener solo última semana
+python3 cleanup_history.py --days 7
+```
+
+**Recomendación:** Ejecutar semanalmente `python3 cleanup_history.py --days 30`
+
 ## URLs
 
 - Grafana: http://localhost:3000

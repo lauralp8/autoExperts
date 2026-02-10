@@ -3,6 +3,8 @@
 Monitorización de relaciones SnapMirror en 1400+ instancias ONTAP Select distribuidas geográficamente. Dashboard en Grafana con mapa interactivo y alertas automáticas.
 **📖 [Ver Referencia Rápida](QUICK_REFERENCE.md)** - Comandos útiles, credenciales y troubleshooting
 
+**📘 [Ver Guía Técnica](docs/GUIA_TECNICA.md)** - Descripción de scripts, arquitectura, demo para clientes y mejoras Grafana
+
 **Credenciales:**
 - MySQL: root / `NetApp123!` | snapmirror_user / `SnapMirror123!`
 - Grafana: admin / admin
@@ -65,6 +67,7 @@ discover_ontap_clusters.py    # Descubrimiento interactivo
 remove_instance.py            # Gestión de instancias (alta/baja)
 check_setup.py                # Verificación de configuración
 test_mysql_connection.py      # Test de conexión MySQL
+cleanup_history.py            # Limpieza de histórico antiguo
 install_mysql_community.sh    # Instalación MySQL Community 8.0
 cleanup_mysql.sh              # Limpieza de instalación MySQL fallida
 collector.service             # Servicio systemd
@@ -222,6 +225,7 @@ Dashboards > Import > Upload JSON file
 | `generate_mock_csv.py` | Generar datos de prueba | `python3 generate_mock_csv.py --num-instances 100` |
 | `discover_ontap_clusters.py` | Descubrir clusters interactivamente | `python3 discover_ontap_clusters.py` |
 | `init_database.py` | Inicializar base de datos | `python3 init_database.py` |
+| `cleanup_history.py` | Limpiar histórico antiguo | `python3 cleanup_history.py --days 30` |
 
 ### Ejecución del collector
 

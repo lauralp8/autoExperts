@@ -257,3 +257,51 @@ class SnapMirrorDB:
         
         result = self._execute(query, fetch=True)
         return result[0] if result else {}
+    
+    def cleanup_old_history(self, days: int = 30) -> int:
+        """
+        Delete history records older than the specified number of days
+        
+        Args:
+            days: Number of days to keep (default 30)
+            
+        Returns:
+            Number of deleted records
+        """
+        query = """
+        DELETE FROM snapmirror_status_history 
+        WHERE collected_at < DATE_SUB(NOW(), INTERVAL %s DAY)
+        """
+        
+        # First count how many will be deleted
+        count_query = """
+        SELECT COUNT(*) as count FROM snapmirror_status_history 
+        WHERE collected_at < DATE_SUB(NOW(), INTERVAL %s DAY)
+        """
+        result = self._execute(count_query, (days,), fetch=True)
+        count = result[0]['count'] if result else 0
+        
+        if count > 0:
+            self._execute(query, (days,))
+            logger.info(f"Deleted {count} history records older than {days} days")
+        
+        return count
+    
+    def get_history_stats(self) -> Dict:
+        """
+        Get statistics about the history table
+        
+        Returns:
+            Dictionary with history statistics
+        """
+        query = """
+        SELECT 
+            COUNT(*) as total_records,
+            MIN(collected_at) as oldest_record,
+            MAX(collected_at) as newest_record,
+            COUNT(*) / GREATEST(DATEDIFF(MAX(collected_at), MIN(collected_at)), 1) as avg_records_per_day
+        FROM snapmirror_status_history
+        """
+        
+        result = self._execute(query, fetch=True)
+        return result[0] if result else {}
