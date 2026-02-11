@@ -1,272 +1,335 @@
-# NetApp SnapMirror Monitor
+# SnapMirror Monitor - Guía Completa de Operación
 
-Monitorización de relaciones SnapMirror en 1400+ instancias ONTAP Select distribuidas geográficamente. Dashboard en Grafana con mapa interactivo y alertas automáticas.
-**📖 [Ver Referencia Rápida](QUICK_REFERENCE.md)** - Comandos útiles, credenciales y troubleshooting
+## Índice
+1. [Arquitectura General](#1-arquitectura-general)
+2. [Qué hace cada componente](#2-qué-hace-cada-componente)
+3. [Cómo funciona run_collector.py](#3-cómo-funciona-run_collectorpy)
+4. [Cómo trae los datos de ONTAP](#4-cómo-trae-los-datos-de-ontap)
+5. [Cómo procesa y guarda en la BBDD](#5-cómo-procesa-y-guarda-en-la-bbdd)
+6. [Cómo llegan los datos a Grafana](#6-cómo-llegan-los-datos-a-grafana)
+7. [Gestión de Instancias (Alta/Baja)](#7-gestión-de-instancias-altabaja)
+8. [Requisitos e Instalación](#8-requisitos-e-instalación)
+9. [Mejoras Potenciales para Grafana](#9-mejoras-potenciales-para-grafana)
+10. [Puntos de Venta](#10-puntos-de-venta)
 
-**📘 [Ver Guía Técnica](docs/GUIA_TECNICA.md)** - Descripción de scripts, arquitectura, demo para clientes y mejoras Grafana
+---
 
-**Credenciales:**
-- MySQL: root / `NetApp123!` | snapmirror_user / `SnapMirror123!`
-- Grafana: admin / admin
-- Base de datos: `snapmirror_monitoring`
-## Qué hace esto
-
-Este proyecto recolecta el estado de las relaciones SnapMirror de múltiples clusters ONTAP y lo presenta en un dashboard visual de Grafana. Básicamente:
-
-- Consulta cada cluster ONTAP via REST API cada 5 minutos
-- Guarda el estado en MySQL
-- Muestra todo en un mapa de Grafana con colores según el estado
-
-**Alertas:**
-- Verde: Todo OK (lag < 15 min)
-- Amarillo: Warning (lag 15-60 min)
-- Rojo: Critical (lag > 1 hora)
-- Morado: Error (unhealthy o pausado)
-
-## Componentes
+## 1. Arquitectura General
 
 ```
-Clusters ONTAP → Python Collector → MySQL → Grafana Dashboard
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           FLUJO DE DATOS                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────────┐    ┌──────────────────┐    ┌────────┐    ┌─────────┐  │
+│  │ ontap_instances │ -> │ Python Collector │ -> │ MySQL  │ -> │ Grafana │  │
+│  │     (.csv)      │    │                  │    │        │    │         │  │
+│  └─────────────────┘    └────────┬─────────┘    └────────┘    └─────────┘  │
+│                                  │                                          │
+│                                  ▼                                          │
+│                         ┌────────────────┐                                  │
+│                         │ ONTAP REST API │                                  │
+│                         │ (1400+ clusters)│                                 │
+│                         └────────────────┘                                  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**El collector** hace consultas escalonadas con 0.2s de delay entre cada cluster para no saturar nada.
+**Ciclo de operación (cada 5 minutos):**
+1. El collector lee los clusters desde el CSV
+2. Consulta cada cluster vía REST API (con 0.2s de delay entre consultas para no saturar)
+3. Procesa los datos y calcula niveles de alerta
+4. Guarda en MySQL (estado actual + histórico)
+5. Grafana lee directamente de MySQL y pinta los dashboards
 
-**La base de datos** tiene 4 tablas principales:
-- `ontap_instances` - Los clusters
-- `snapmirror_relationships` - Las relaciones configuradas
-- `snapmirror_status_current` - Estado actual
-- `snapmirror_status_history` - Histórico
+---
 
-**El dashboard** muestra:
-- Mapa con marcadores de colores por cada cluster
-- Tabla con todas las relaciones (no solo las problemáticas)
-- Gráficas de tendencia de lag
+## 2. Qué hace cada componente
 
-## Archivos del Proyecto
+| Archivo | Función |
+|---------|---------|
+| `run_collector.py` | **Script principal** - Punto de entrada, parsea argumentos, arranca el collector |
+| `check_setup.py` | **Verificación** - Comprueba que todo esté configurado correctamente |
+| `remove_instance.py` | **Gestión de instancias** - Alta/baja de clusters ONTAP |
+| `src/collector.py` | **Lógica principal** - Lee CSV, coordina recolección escalonada, calcula alertas |
+| `src/ontap_client.py` | **Cliente REST API** - Habla con ONTAP (`/api/snapmirror/relationships`) |
+| `src/database.py` | **Operaciones MySQL** - Insert, update, queries a la base de datos |
+| `src/mock_data.py` | **Datos simulados** - Generador para testing sin conectar a ONTAP real |
+| `config/config.yaml` | **Configuración** - BBDD, thresholds, intervalos |
+| `config/ontap_instances.csv` | **Inventario** - Lista de clusters a monitorizar |
+| `config/mysql_schema.sql` | **Schema SQL** - Estructura de tablas y vistas |
+| `grafana/*.json` | **Dashboards** - Configuración de paneles Grafana |
 
-## Archivos del Proyecto
+---
 
-```
-config/
-  config.yaml                 # Configuración principal
-  mysql_schema.sql            # Schema de base de datos
-  ontap_instances.csv         # Lista de instancias ONTAP
+## 3. Cómo funciona run_collector.py
 
-src/
-  collector.py                # Recolector principal
-  ontap_client.py             # Cliente REST API ONTAP
-  database.py                 # Operaciones MySQL
-  mock_data.py                # Generador de datos simulados
+`run_collector.py` es el **punto de entrada principal** del sistema. Es el script que se ejecuta directamente.
 
-grafana/
-  snapmirror_dashboard.json   # Dashboard pre-configurado
-
-run_collector.py              # Script principal
-init_database.py              # Inicialización de BD
-discover_ontap_clusters.py    # Descubrimiento interactivo
-remove_instance.py            # Gestión de instancias (alta/baja)
-check_setup.py                # Verificación de configuración
-test_mysql_connection.py      # Test de conexión MySQL
-cleanup_history.py            # Limpieza de histórico antiguo
-install_mysql_community.sh    # Instalación MySQL Community 8.0
-cleanup_mysql.sh              # Limpieza de instalación MySQL fallida
-collector.service             # Servicio systemd
-setup_lab.sh                  # Setup automatizado
-QUICK_REFERENCE.md            # Referencia rápida de comandos
-README.md                     # Este archivo
-```
-
-## Instalación
-
-### Requisitos
-- Python 3.6+ (RHEL 8 incluye 3.6.8, RHEL 9 incluye 3.9+)
-- MySQL 8.0 / MariaDB 10.5+
-- Grafana 10.0+
-- RHEL 8/9, Ubuntu 20.04+
-
-**Credenciales por defecto:**
-- MySQL root: `NetApp123!`
-- MySQL app: usuario `snapmirror_user` / password `SnapMirror123!`
-- Base de datos: `snapmirror_monitoring`
-
-
-### Setup rápido (RHEL)
+### Argumentos disponibles
 
 ```bash
-cd /root
-git clone <repo> corme
-cd corme
-chmod +x setup_lab.sh
-./setup_lab.sh
+python run_collector.py [opciones]
 ```
 
-El script instala todo automáticamente.
+| Argumento | Descripción | Valor por defecto |
+|-----------|-------------|-------------------|
+| `--config` | Ruta al archivo de configuración | `config/config.yaml` |
+| `--once` | Ejecutar una sola vez y salir | No (continuo) |
+| `--mode` | Forzar modo `mock` o `real` | Usa el de config.yaml |
+| `--log-level` | Nivel de log: DEBUG, INFO, WARNING, ERROR | INFO |
 
-**Si el script falla al instalar MySQL:**
+### Ejemplos de uso
+
 ```bash
-# Instalación MySQL Community 8.0
-chmod +x install_mysql_community.sh
-sudo ./install_mysql_community.sh
+# Una sola ejecución con datos simulados (testing)
+python run_collector.py --once --mode mock
+
+# Una sola ejecución con datos reales
+python run_collector.py --once --mode real
+
+# Modo continuo (producción) - cada 5 minutos
+python run_collector.py --mode real
+
+# Con configuración personalizada
+python run_collector.py --config mi_config.yaml --once
+
+# Debug detallado
+python run_collector.py --log-level DEBUG --once
 ```
 
-Este script descarga e instala MySQL 8.0 directamente desde Oracle, configura la base de datos, crea el usuario y carga el schema automáticamente.
+### Qué hace internamente
 
-**Verificar instalación:**
-```bash
-python3 check_setup.py
+1. **Parsea argumentos** de línea de comandos
+2. **Configura logging** (archivo `logs/collector.log` + consola)
+3. **Crea el collector** (`SnapMirrorCollector`)
+4. **Ejecuta setup()**: conecta a MySQL, carga instancias del CSV, las registra en BBDD
+5. **Ejecuta la recolección**:
+   - `--once`: ejecuta `collect_all_staggered()` una vez
+   - Sin `--once`: ejecuta `run_continuous()` que repite cada 5 min
+6. **Limpieza**: cierra conexiones al terminar
+
+---
+
+## 4. Cómo trae los datos de ONTAP
+
+### Endpoint REST API utilizado
+
+```
+GET https://{cluster_ip}/api/snapmirror/relationships
 ```
 
-Este script verifica que todos los componentes estén correctamente configurados.
+### Campos que obtiene de cada relación
 
-**Si necesitas cargar el schema manualmente:**
-```bash
-mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring < config/mysql_schema.sql
+| Campo | Descripción | Ejemplo |
+|-------|-------------|---------|
+| `uuid` | Identificador único de la relación | `a1b2c3d4-...` |
+| `source.path` | Volumen/SVM origen | `svm1:vol_data` |
+| `destination.path` | Volumen/SVM destino | `svm2:vol_data_dr` |
+| `policy.name` | Política de replicación | `MirrorAllSnapshots` |
+| `state` | Estado de la relación | `snapmirrored`, `broken-off` |
+| `healthy` | Indicador de salud | `true` / `false` |
+| `lag_time` | Desfase en formato ISO 8601 | `PT1H30M45S` |
+| `transfer.state` | Estado de transferencia actual | `idle`, `transferring` |
+| `transfer.end_time` | Última transferencia completada | ISO timestamp |
+
+### Conversión de lag_time
+
+El código convierte el formato ISO 8601 a segundos:
+- `PT1H30M45S` → 5445 segundos
+- `PT15M` → 900 segundos
+- `PT2H` → 7200 segundos
+
+### Recolección escalonada (Staggered)
+
+Para no saturar la red ni los clusters:
+- **Delay entre consultas**: 0.2 segundos
+- **1400 clusters × 0.2s = ~5 minutos** para completar un ciclo
+- Esto coincide con el intervalo de recolección, evitando picos
+
+---
+
+## 5. Cómo procesa y guarda en la BBDD
+
+### Tablas principales
+
+| Tabla | Propósito | Comportamiento |
+|-------|-----------|----------------|
+| `ontap_instances` | Inventario de clusters | UPSERT (actualiza si existe) |
+| `snapmirror_relationships` | Relaciones SnapMirror por cluster | UPSERT |
+| `snapmirror_status_current` | Estado actual | Se SOBREESCRIBE cada ciclo |
+| `snapmirror_status_history` | Histórico | Se INSERTA cada ciclo |
+
+### Cálculo automático de alertas
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    NIVELES DE ALERTA                        │
+├─────────────────────────────────────────────────────────────┤
+│  lag < 15 min (900s)      →  alert_level = 'ok'      🟢     │
+│  lag 15-60 min            →  alert_level = 'warning' 🟡     │
+│  lag > 60 min (3600s)     →  alert_level = 'critical' 🔴    │
+│  healthy = false          →  alert_level = 'error'   🟣     │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Generar datos de prueba y ejecutar:**
-```bash
-# 1. Generar datos mock
-python3 generate_mock_csv.py --num-instances 50
-
-# 2. Ejecutar collector una vez (modo mock)
-python3 run_collector.py --mode mock --once
-
-# 3. Verificar instalación completa
-python3 check_setup.py
-```
-
-### Setup manual
-
-**1. Instalar dependencias Python:**
-```bash
-pip3 install -r requirements.txt
-```
-
-**2. Configurar MySQL:**
-
-Las credenciales ya están configuradas en `config/config.yaml`:
+Los thresholds son configurables en `config/config.yaml`:
 ```yaml
-database:
-  host: localhost
-  port: 3306
-  user: snapmirror_user
-  password: SnapMirror123!
-  database: snapmirror_monitoring
+thresholds:
+  warning: 900   # 15 minutos
+  critical: 3600 # 1 hora
 ```
 
-Cargar el schema de base de datos:
-```bash
-mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring < config/mysql_schema.sql
+### Flujo de guardado
+
+```
+Por cada cluster:
+  1. upsert_instance()      → Registra/actualiza el cluster
+  2. Por cada relación:
+     a. upsert_relationship()    → Registra/actualiza la relación
+     b. update_current_status()  → Sobreescribe estado actual
+     c. insert_history()         → Añade al histórico
 ```
 
-**3. Configurar clusters ONTAP:**
+### Vistas SQL precreadas
 
-Opción A - Descubrimiento interactivo (recomendado):
-```bash
-python3 discover_ontap_clusters.py
+| Vista | Uso | Descripción |
+|-------|-----|-------------|
+| `v_snapmirror_map` | Mapa Grafana | Datos agregados por cluster con coordenadas |
+| `v_snapmirror_detail` | Tabla detalle | Todas las relaciones con su estado |
+
+---
+
+## 6. Cómo llegan los datos a Grafana
+
+### Configuración del Datasource MySQL
+
+**Paso 1:** Acceder a Grafana
+- URL: `http://localhost:3000`
+- Usuario: `admin`
+- Password: `admin` (cambiar en primer login)
+
+**Paso 2:** Añadir datasource
 ```
-Te guía paso a paso para añadir clusters, probar conexión, y descubrir relaciones.
-
-Opción B - Modo mock (para testing):
-```bash
-python3 generate_mock_csv.py --num-instances 100
-# Nota: Genera 'config/ontap_instances_mock.csv'
-# Renombrar a 'ontap_instances.csv' o actualizar config.yaml
-```
-
-Opción C - Editar CSV manualmente:
-```csv
-name,ip_address,latitude,longitude,location_name,username,password
-cluster1,192.168.0.101,40.4165,-3.7038,Madrid,admin,Netapp1!
-```
-
-**4. Configurar Grafana:**
-
-Acceder a Grafana (http://localhost:3000 - user: admin / pass: admin)
-
-**a) Añadir datasource MySQL:**
-```
-Configuración > Data sources > Add data source > MySQL
-
-Configuraciones:
-  Name: SnapMirror DB
-  Host: localhost:3306        (o 127.0.0.1:3306 si da error)
-  Database: snapmirror_monitoring
-  User: snapmirror_user
-  Password: SnapMirror123!
-  
-  Session timezone: (dejar vacío)
-  
-  ⚠️ IMPORTANTE: NO marcar "TLS/SSL" a menos que MySQL tenga SSL configurado
-  
-  [Save & Test]  ← Debe mostrar "Database Connection OK"
+Configuration (⚙️) → Data sources → Add data source → MySQL
 ```
 
-Si aparece error "failed to connect to server", ver sección Troubleshooting.
+**Paso 3:** Configurar conexión
+```
+Name: SnapMirror DB
+Host: localhost:3306
+Database: snapmirror_monitoring
+User: snapmirror_user
+Password: SnapMirror123!
 
-**b) Importar dashboard:**
-```bash
-Dashboards > Import > Upload JSON file
+Session timezone: (dejar vacío)
+Max open connections: 100
+Max idle connections: 2
+Max connection lifetime: 14400
+
+[Save & test]  ← Debe mostrar "Database Connection OK"
+```
+
+**Paso 4:** Importar dashboard
+```
+Dashboards (☰) → Import → Upload JSON file
   → Seleccionar: grafana/snapmirror_dashboard.json
-  → Elegir datasource: SnapMirror DB
-  → Import
+  → Select a datasource: SnapMirror DB
+  → [Import]
 ```
 
-## Uso
+### Conexión
 
-### Scripts útiles
+Grafana tiene configurado un **datasource MySQL** apuntando a:
+- Host: según config
+- Database: `snapmirror_monitoring`
 
-| Script | Descripción | Ejemplo |
-|--------|-------------|---------|
-| `run_collector.py` | Script principal del collector | `python3 run_collector.py --mode mock --once` |
-| `check_setup.py` | Verificar configuración completa | `python3 check_setup.py` |
-| `test_mysql_connection.py` | Probar conexión a MySQL (troubleshooting) | `python3 test_mysql_connection.py` |
-| `remove_instance.py` | Gestionar instancias (baja/alta) | `python3 remove_instance.py --list` |
-| `generate_mock_csv.py` | Generar datos de prueba | `python3 generate_mock_csv.py --num-instances 100` |
-| `discover_ontap_clusters.py` | Descubrir clusters interactivamente | `python3 discover_ontap_clusters.py` |
-| `init_database.py` | Inicializar base de datos | `python3 init_database.py` |
-| `cleanup_history.py` | Limpiar histórico antiguo | `python3 cleanup_history.py --days 30` |
+### Paneles del dashboard
 
-### Ejecución del collector
+| Panel | Tipo | Query |
+|-------|------|-------|
+| Total ONTAP Instances | Stat | `SELECT COUNT(*) FROM ontap_instances WHERE is_active = TRUE` |
+| Total SnapMirror Relations | Stat | `SELECT COUNT(*) FROM snapmirror_relationships` |
+| Warnings | Stat | `SELECT COUNT(*) FROM snapmirror_status_current WHERE alert_level = 'warning'` |
+| Critical | Stat | `SELECT COUNT(*) FROM snapmirror_status_current WHERE alert_level = 'critical'` |
+| Errors | Stat | `SELECT COUNT(*) FROM snapmirror_status_current WHERE alert_level = 'error'` |
+| Mapa | Geomap | `SELECT * FROM v_snapmirror_map` |
+| Tabla detalle | Table | `SELECT * FROM v_snapmirror_detail` |
 
-**Test rápido con datos simulados:**
+### Colores del mapa
+
+El mapa usa el campo `overall_status` de `v_snapmirror_map`:
+- **Verde**: Todos los relationships OK
+- **Amarillo**: Al menos un warning
+- **Rojo**: Al menos un critical
+- **Morado**: Al menos un error (unhealthy)
+
+---
+
+## 7. Gestión de Instancias (Alta/Baja)
+
+### Dar de ALTA una instancia
+
+1. Añadir línea al CSV `config/ontap_instances.csv`:
+```csv
+nombre-cluster,192.168.1.100,40.4168,-3.7038,Madrid DC,admin,password123
+```
+
+2. El próximo ciclo de recolección la registrará automáticamente
+
+### Dar de BAJA una instancia
+
+#### Opción A - Baja lógica (recomendado)
+```sql
+UPDATE ontap_instances SET is_active = FALSE WHERE name = 'nombre-cluster';
+```
+- Los datos históricos se mantienen
+- Grafana deja de mostrarla (filtra por `is_active = TRUE`)
+
+#### Opción B - Eliminar del CSV
+- Quitar la línea del archivo `config/ontap_instances.csv`
+- El collector deja de consultarla
+- Datos históricos permanecen en BBDD
+
+#### Opción C - Eliminación total
+```sql
+DELETE FROM ontap_instances WHERE name = 'nombre-cluster';
+```
+- Las foreign keys `ON DELETE CASCADE` eliminan todo en cascada
+- Se pierden todos los datos históricos
+
+#### Opción D - Usar el script `remove_instance.py`
 ```bash
-python3 run_collector.py --mode mock --once
+# Ver estado actual
+python remove_instance.py --list
+
+# Baja lógica (recomendado)
+python remove_instance.py --name "nombre-cluster" --disable
+
+# Eliminación completa
+python remove_instance.py --name "nombre-cluster" --delete
+
+# Por IP
+python remove_instance.py --ip "192.168.1.100" --delete
 ```
 
-**Recolección real (una vez):**
-```bash
-python3 run_collector.py --mode real --once
-```
+---
 
-**Modo continuo (cada 5 min):**
-**Modo continuo (cada 5 min):**
-```bash
-python3 run_collector.py --mode real
-```
+## 8. Requisitos e Instalación
 
-### Como servicio (producción)
+### Requisitos de sistema
 
-**Linux:**
-```bash
-sudo cp collector.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable collector
-sudo systemctl start collector
-sudo systemctl status collector
-```
+| Componente | Versión mínima |
+|------------|----------------|
+| Python | 3.9+ |
+| MySQL | 8.0+ |
+| Grafana | 10.0+ |
+| SO | RHEL/Ubuntu/Windows |
 
-**Ver logs:**
-```bash
-sudo journalctl -u collector -f
-```
-
-## Configuración
-
-### Valores por defecto (Referencia Rápida)
+### Credenciales y configuración por defecto
 
 | Parámetro | Valor | Ubicación |
-|-----------|-------|----------|
+|-----------|-------|-----------|
 | **Base de datos** | `snapmirror_monitoring` | `config/config.yaml` |
 | **Usuario MySQL** | `snapmirror_user` | `config/config.yaml` |
 | **Password MySQL** | `SnapMirror123!` | `config/config.yaml` |
@@ -275,213 +338,150 @@ sudo journalctl -u collector -f
 | **Grafana URL** | `http://localhost:3000` | - |
 | **Grafana user** | `admin` | Por defecto |
 | **Grafana pass** | `admin` | Por defecto |
-| **CSV instancias** | `config/ontap_instances.csv` | - |
-| **Intervalo colección** | `300s` (5 min) | `config/config.yaml` |
-| **Threshold Warning** | `900s` (15 min) | `config/config.yaml` |
-| **Threshold Critical** | `3600s` (60 min) | `config/config.yaml` |
 
-### Archivo config/config.yaml
-
-Todos los parámetros se configuran en `config/config.yaml`:
-
-```yaml
-database:
-  host: localhost
-  port: 3306
-  user: snapmirror_user
-  password: SnapMirror123!
-  database: snapmirror_monitoring  # ← Nombre de la base de datos
-
-collector:
-  mode: real  # real o mock
-  interval_seconds: 300  # 5 minutos
-  stagger_delay_seconds: 0.2  # delay entre clusters
-  timeout_seconds: 30
-
-thresholds:
-  warning: 900   # 15 min
-  critical: 3600 # 1 hora
-```
-
-## Dashboard de Grafana
-
-**IMPORTANTE:** Asegúrate de configurar el datasource MySQL primero (ver sección Instalación paso 4).
-
-El dashboard tiene:
-
-**Métricas superiores:**
-- Total instances
-- Total relations
-- Warnings / Critical / Errors
-
-**Mapa:**
-- Marcador por cada cluster en su ubicación
-- Color según peor estado
-- Tamaño según número de relaciones
-- Tooltip con detalles
-
-**Tabla:**
-- Todas las relaciones (no solo problemas)
-- Ordenada por severidad
-- Columnas: cluster, ubicación, source, destination, lag, estado
-
-**Gráfica:**
-- Evolución del lag últimas 24h
-- Todas las relaciones
-
-Refresh automático cada 30 segundos.
-
-## Tiempos
-
-Con 1400 instancias y 0.2s de delay:
-- Tiempo por ciclo: ~5-7 minutos
-- Se completa antes del siguiente intervalo (5 min)
-
-Si tienes pocos clusters, puedes reducir el delay a 0.1s.
-
-## Troubleshooting
-
-### Error en Grafana: "failed to connect to server" al configurar datasource
-
-Si al configurar el datasource MySQL en Grafana aparece el error `[sqleng.connectionError] failed to connect to server`:
-
-**🔍 Diagnóstico rápido:**
-```bash
-python3 test_mysql_connection.py
-```
-Este script te dirá exactamente qué configuración usar en Grafana.
-
-**Soluciones paso a paso:**
-
-**1. Verificar que MySQL está corriendo:**
-```bash
-sudo systemctl status mysqld
-# o
-sudo systemctl status mariadb
-```
-
-**2. Verificar que la base de datos existe:**
-```bash
-mysql -u root -pNetApp123! -e "SHOW DATABASES LIKE 'snapmirror_monitoring';"
-```
-
-**3. Verificar que el usuario existe y tiene permisos:**
-```bash
-mysql -u root -pNetApp123! -e "SELECT User, Host FROM mysql.user WHERE User = 'snapmirror_user';"
-mysql -u root -pNetApp123! -e "SHOW GRANTS FOR 'snapmirror_user'@'localhost';"
-```
-
-**4. Probar conexión con usuario de aplicación:**
-```bash
-mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SELECT 1;"
-```
-
-**5. Si el comando anterior falla, recrear el usuario:**
-```bash
-mysql -u root -pNetApp123! <<EOF
-DROP USER IF EXISTS 'snapmirror_user'@'localhost';
-CREATE USER 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';
-GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';
-FLUSH PRIVILEGES;
-EOF
-```
-
-**6. Configuración del datasource en Grafana:**
+### Dependencias Python
 
 ```
-Name: SnapMirror DB
-Host: localhost:3306
-Database: snapmirror_monitoring
-User: snapmirror_user
-Password: SnapMirror123!
-
-⚠️ IMPORTANTE: NO marcar "TLS/SSL Mode"
+pymysql>=1.0.0
+pyyaml>=6.0
+requests>=2.28.0
 ```
 
-Si da error, prueba cambiar Host a: `127.0.0.1:3306`
-
-**7. Verificar logs de Grafana (si hay problemas):**
-```bash
-sudo journalctl -u grafana-server -n 50 --no-pager
-# o
-sudo tail -f /var/log/grafana/grafana.log
-```
-
-### Error: "No se crearon las tablas esperadas" o MySQL no se instaló
-
-Si el setup automático falla al instalar o configurar MySQL:
-
-**Opción A - Instalación MySQL Community 8.0 (RECOMENDADO para RHEL sin suscripción):**
-```bash
-chmod +x install_mysql_community.sh
-sudo ./install_mysql_community.sh
-```
-Este script descarga MySQL 8.0 directamente desde Oracle, no requiere suscripción RHEL, y configura todo automáticamente (base de datos, usuario, schema).
-
-**Opción B - Instalación manual paso a paso:**
+### Instalación rápida
 
 ```bash
-# 1. Instalar MySQL (requiere suscripción RHEL o usar install_mysql_community.sh)
-sudo dnf install -y mysql-server mysql
-# o en Ubuntu: sudo apt install -y mysql-server
+# 1. Clonar repositorio
+cd /opt
+git clone <repo> corme
+cd corme
 
-# 2. Iniciar servicio
-sudo systemctl start mysqld
-sudo systemctl enable mysqld
-sudo systemctl status mysqld
+# 2. Instalar dependencias
+pip3 install -r requirements.txt
 
-# 3. Verificar que MySQL está corriendo
-sudo systemctl status mysqld
+# 3. Configurar MySQL
+mysql -u root -p < config/mysql_schema.sql
 
-# 4. Configurar password de root y crear base de datos
-mysql -u root -pNetApp123! <<EOF
-CREATE DATABASE IF NOT EXISTS snapmirror_monitoring;
-CREATE USER IF NOT EXISTS 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';
-GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';
-FLUSH PRIVILEGES;
-EOF
+# 4. Editar configuración
+vi config/config.yaml
+vi config/ontap_instances.csv
 
-# 5. Cargar el schema
-mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring < config/mysql_schema.sql
+# 5. Test con datos mock
+python run_collector.py --once --mode mock
 
-# 6. Verificar que se crearon las tablas
-mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SHOW TABLES;"
+# 6. Test con datos reales
+python run_collector.py --once --mode real
+
+# 7. Configurar servicio (Linux)
+sudo cp collector.service /etc/systemd/system/
+sudo systemctl enable collector
+sudo systemctl start collector
 ```
+### Script de verificación
 
-Deberías ver 4 tablas: `ontap_instances`, `snapmirror_relationships`, `snapmirror_status_current`, `snapmirror_status_history`
+Antes de ejecutar el collector, verifica que todo esté configurado:
 
-### Error: "Connection refused" al ejecutar collector
-
-Verificar que MySQL está corriendo y acepta conexiones:
 ```bash
-sudo systemctl status mysqld
-mysql -u snapmirror_user -pSnapMirror123! -e "SELECT 1;"
+python check_setup.py
 ```
 
-### CSV de instancias no encontrado
+Este script comprueba:
+- ✓ Archivos requeridos existen
+- ✓ config.yaml es válido
+- ✓ Dependencias Python instaladas
+- ✓ MySQL acepta conexiones
+- ✓ Tablas creadas correctamente
+- ✓ Grafana está accesible
 
-Si usaste `generate_mock_csv.py`, el archivo se crea como `ontap_instances_mock.csv`:
+Salida de ejemplo:
+```
+╔══════════════════════════════════════════════════════════╗
+║   SnapMirror Monitor - Verificación de Configuración    ║
+╚══════════════════════════════════════════════════════════╝
+
+============================================================
+  Verificando archivos requeridos
+============================================================
+
+✓ Archivo de configuración: config/config.yaml
+✓ Schema de MySQL: config/mysql_schema.sql
+✓ Collector principal: src/collector.py
+...
+
+============================================================
+  Resumen
+============================================================
+
+✓ Archivos requeridos
+✓ Configuración
+✓ Dependencias Python
+✓ Base de datos MySQL
+✓ Grafana
+
+✓ SISTEMA LISTO
+```
+### Verificar funcionamiento
+
 ```bash
-cd config/
-mv ontap_instances_mock.csv ontap_instances.csv
+# Ver logs
+tail -f logs/collector.log
+
+# Ver estado del servicio
+sudo systemctl status collector
+
+# Verificar datos en MySQL
+mysql -u snapmirror_user -p snapmirror_monitoring -e "SELECT * FROM v_snapmirror_map LIMIT 5;"
 ```
-
-O editar `config.yaml` para apuntar al archivo correcto.
-
-## Notas
-
-- El collector usa asyncio para consultas concurrentes
-- Hay delay escalonado para no saturar la red
-- SSL verification está deshabilitado (`verify_ssl=False`) - cuidado en producción
-- El histórico crece indefinidamente - considera limpieza periódica
-- Modo mock es útil para testing sin clusters reales
-
-## ¿Preguntas?
-
-Si necesitas más info, ayuda con el deployment, o tienes algún problema, contáctame directamente.
 
 ---
 
-**Autor:** NetApp Professional Services  
-**Versión:** 1.0.0
+## 9. Mejoras Potenciales para Grafana
 
+| Mejora | Descripción | Complejidad |
+|--------|-------------|-------------|
+| **Filtro por región** | Variable de template para filtrar por `location_name` | Baja |
+| **Drill-down desde mapa** | Clic en marcador → detalle del cluster | Media |
+| **Alerting nativo** | Alertas Grafana → email/Teams cuando hay criticals | Baja |
+| **Gráfica de tendencia** | Time series con histórico de lag | Baja |
+| **Top N peores** | Panel con las 10 relaciones con mayor lag | Baja |
+| **Última recolección** | Indicador de hace cuánto se ejecutó el collector | Baja |
+| **Filtro por política** | Ver solo relaciones con ciertas policies | Baja |
+| **Dashboard por relación** | Ya existe: `snapmirror_dashboard_per_relationship.json` | ✅ |
+
+---
+
+## 10. Puntos de Venta
+
+### Para el cliente
+
+| Característica | Beneficio |
+|----------------|-----------|
+| **Escalabilidad probada** | Diseñado para 1400+ instancias con recolección escalonada |
+| **Sin impacto en producción** | Solo lecturas REST API, 0.2s entre consultas |
+| **Alertas automáticas** | Thresholds configurables, visualización inmediata |
+| **Datos históricos** | Permite análisis de tendencias y auditoría |
+| **Modo mock** | Pueden probar sin conectarse a ONTAP real |
+| **Todo incluido** | Schema SQL, dashboards Grafana, servicio systemd |
+| **Mantenimiento simple** | Dar de baja/alta con CSV o un UPDATE SQL |
+| **Open source friendly** | Python estándar, sin licencias adicionales |
+
+### Diferenciadores técnicos
+
+- Recolección asíncrona con `asyncio`
+- Delay configurable entre consultas (no satura la red)
+- Vistas SQL optimizadas para Grafana
+- Histórico para análisis de tendencias
+- Flag `is_active` para bajas lógicas sin perder datos
+
+---
+
+## Contacto y Soporte
+
+Para dudas o problemas:
+1. Revisar logs: `logs/collector.log`
+2. Verificar conectividad a clusters ONTAP
+3. Verificar conexión a MySQL
+4. Comprobar credenciales en `config.yaml` y CSV
+
+---
+
+*Documento generado para SnapMirror Monitor (CORME)*
