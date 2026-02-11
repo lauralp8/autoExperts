@@ -91,6 +91,7 @@ class SnapMirrorDB:
         ON DUPLICATE KEY UPDATE 
             ip_address = VALUES(ip_address),
             cluster_uuid = VALUES(cluster_uuid),
+            is_active = TRUE,
             updated_at = CURRENT_TIMESTAMP
         """
         
