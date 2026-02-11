@@ -78,22 +78,37 @@ class SnapMirrorDB:
             raise
     
     def upsert_instance(self, name: str, ip: str, latitude: float, longitude: float, 
-                       location: str, cluster_uuid: Optional[str] = None) -> int:
+                       location: str, cluster_uuid: Optional[str] = None, force_active: bool = False) -> int:
         """
         Insert or update an ONTAP instance
+        
+        Args:
+            force_active: If True, sets is_active=TRUE even on UPDATE (use only for discover script)
         
         Returns:
             Instance ID
         """
-        query = """
-        INSERT INTO ontap_instances (name, ip_address, latitude, longitude, location_name, cluster_uuid)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE 
-            ip_address = VALUES(ip_address),
-            cluster_uuid = VALUES(cluster_uuid),
-            is_active = TRUE,
-            updated_at = CURRENT_TIMESTAMP
-        """
+        if force_active:
+            # Force activation (used by discover script)
+            query = """
+            INSERT INTO ontap_instances (name, ip_address, latitude, longitude, location_name, cluster_uuid)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE 
+                ip_address = VALUES(ip_address),
+                cluster_uuid = VALUES(cluster_uuid),
+                is_active = TRUE,
+                updated_at = CURRENT_TIMESTAMP
+            """
+        else:
+            # Normal update: respects existing is_active state
+            query = """
+            INSERT INTO ontap_instances (name, ip_address, latitude, longitude, location_name, cluster_uuid)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE 
+                ip_address = VALUES(ip_address),
+                cluster_uuid = VALUES(cluster_uuid),
+                updated_at = CURRENT_TIMESTAMP
+            """
         
         instance_id = self._execute(query, (name, ip, latitude, longitude, location, cluster_uuid))
         

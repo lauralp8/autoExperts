@@ -7,10 +7,16 @@ Incremental mode: allows adding new clusters without deleting existing ones
 
 import csv
 import sys
+import os
 import requests
 import urllib3
+import yaml
 from pathlib import Path
 from requests.auth import HTTPBasicAuth
+
+# Add src to path for database import
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+from database import SnapMirrorDB
 
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -207,6 +213,7 @@ def main():
     
     # Loop to add clusters
     cluster_count = 0
+    changes_made = False
     
     while True:
         print_section(f"CLUSTER #{cluster_count + 1}")
@@ -287,10 +294,12 @@ def main():
             # Update existing cluster
             instances[existing_idx] = instance
             print(f"\n✓ Cluster '{cluster_name}' UPDATED in inventory (was already present)")
+            changes_made = True
         else:
             # Add new cluster
             instances.append(instance)
             cluster_count += 1
+            changes_made = True
             print(f"\n✓ Cluster added to inventory ({len(instances)} total)")
         
         # Ask if wants to add more
@@ -299,8 +308,8 @@ def main():
             break
     
     # Save CSV
-    if cluster_count == 0:
-        print("\n⚠ No cluster was added. File was not modified")
+    if not changes_made:
+        print("\n⚠ No changes made. File was not modified")
         return
     
     print_header("SAVING CONFIGURATION")
@@ -321,6 +330,43 @@ def main():
                 print(line.rstrip())
     
     print("-" * 70)
+    
+    # Update database 
+    print()
+    if get_yes_no("Update database (recommended - reactivates clusters if needed)?", True):
+        try:
+            # Load config
+            with open('config/config.yaml', 'r') as f:
+                config = yaml.safe_load(f)
+            
+            db_config = config['database']
+            db = SnapMirrorDB(
+                host=db_config['host'],
+                port=db_config['port'],
+                user=db_config['user'],
+                password=db_config['password'],
+                database=db_config['database']
+            )
+            
+            db.connect()
+            
+            # Register/activate all instances
+            for inst in instances:
+                db.upsert_instance(
+                    name=inst['name'],
+                    ip=inst['ip_address'],
+                    latitude=inst['latitude'],
+                    longitude=inst['longitude'],
+                    location=inst['location_name'],
+                    force_active=True  # Reactivate if was disabled
+                )
+            
+            db.disconnect()
+            print(f"✓ Database updated - {len(instances)} instances registered/activated")
+        
+        except Exception as e:
+            print(f"⚠ Could not update database: {e}")
+            print(f"  You can run the collector to register them automatically")
     
     # Update config.yaml
     print()
