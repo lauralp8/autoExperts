@@ -276,10 +276,22 @@ def main():
             'password': password
         }
         
-        instances.append(instance)
-        cluster_count += 1
+        # Check if cluster already exists (by name or IP)
+        existing_idx = None
+        for idx, existing in enumerate(instances):
+            if existing['name'] == cluster_name or existing['ip_address'] == cluster_ip:
+                existing_idx = idx
+                break
         
-        print(f"\n✓ Cluster added to inventory ({cluster_count} total)")
+        if existing_idx is not None:
+            # Update existing cluster
+            instances[existing_idx] = instance
+            print(f"\n✓ Cluster '{cluster_name}' UPDATED in inventory (was already present)")
+        else:
+            # Add new cluster
+            instances.append(instance)
+            cluster_count += 1
+            print(f"\n✓ Cluster added to inventory ({len(instances)} total)")
         
         # Ask if wants to add more
         print()
