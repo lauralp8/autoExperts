@@ -84,7 +84,7 @@ def test_connection():
             print(f"  Host: {host}:{db_config.get('port', 3306)}")
             print(f"  Database: {db_config.get('database', 'snapmirror_monitoring')}")
             print(f"  User: {db_config.get('user', 'snapmirror_user')}")
-            print(f"  Password: {db_config.get('password', 'SnapMirror123!')}")
+            print(f"  Password: {db_config.get('password', '<change_me>')}")
             print(f"  TLS/SSL: NO (dejar sin marcar)")
             print(f"{'='*60}\n")
             

@@ -79,7 +79,7 @@ class MockDataGenerator:
                 'location_name': f'{city} - Sitio {i % 10 + 1}',
                 'cluster_uuid': f'uuid-{i:04d}-{random.randint(1000, 9999)}',
                 'username': 'admin',
-                'password': 'NetApp123'  # In production, use vault
+                'password': 'mock_password'  # In production, use vault
             }
             
             instances.append(instance)

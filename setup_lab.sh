@@ -10,9 +10,9 @@ echo "========================================="
 echo ""
 
 # Variables de configuración
-MYSQL_ROOT_PASSWORD="NetApp123!"
+MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-change_me}"
 MYSQL_APP_USER="snapmirror_user"
-MYSQL_APP_PASSWORD="SnapMirror123!"
+MYSQL_APP_PASSWORD="${MYSQL_APP_PASSWORD:-change_me}"
 MYSQL_DATABASE="snapmirror_monitoring"
 
 # Detectar distribución
@@ -84,13 +84,13 @@ if systemctl is-active --quiet mysqld || systemctl is-active --quiet mariadb; th
     echo "✓ MySQL corriendo"
     
     # Verificar si la base de datos ya existe (el script install_mysql_community.sh ya la crea)
-    DB_EXISTS=$(/usr/bin/mysql -u root -pNetApp123! -e "SHOW DATABASES LIKE 'snapmirror_monitoring';" 2>/dev/null | grep -c snapmirror_monitoring)
+    DB_EXISTS=$(/usr/bin/mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "SHOW DATABASES LIKE 'snapmirror_monitoring';" 2>/dev/null | grep -c snapmirror_monitoring)
     
     if [ "$DB_EXISTS" -eq 0 ]; then
         echo "  ⚙ Creando base de datos y usuario..."
-        /usr/bin/mysql -u root -pNetApp123! <<EOF 2>/dev/null
+        /usr/bin/mysql -u root -p"$MYSQL_ROOT_PASSWORD" <<EOF 2>/dev/null
 CREATE DATABASE IF NOT EXISTS snapmirror_monitoring;
-CREATE USER IF NOT EXISTS 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';
+CREATE USER IF NOT EXISTS 'snapmirror_user'@'localhost' IDENTIFIED BY '$MYSQL_APP_PASSWORD';
 GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';
 FLUSH PRIVILEGES;
 EOF
@@ -158,7 +158,7 @@ echo ""
 echo "[6/6] Inicializando base de datos..."
 
 # Verificar si las tablas ya existen
-TABLE_COUNT=$(/usr/bin/mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SHOW TABLES;" 2>/dev/null | wc -l)
+TABLE_COUNT=$(/usr/bin/mysql -u snapmirror_user -p"$MYSQL_APP_PASSWORD" snapmirror_monitoring -e "SHOW TABLES;" 2>/dev/null | wc -l)
 
 if [ $TABLE_COUNT -gt 1 ]; then
     echo "✓ Base de datos ya tiene $((TABLE_COUNT - 1)) tablas"
@@ -166,10 +166,10 @@ else
     # Cargar el schema SQL si las tablas no existen
     if [ -f "config/mysql_schema.sql" ]; then
         echo "  → Cargando schema SQL..."
-        /usr/bin/mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring < config/mysql_schema.sql 2>/dev/null
+        /usr/bin/mysql -u snapmirror_user -p"$MYSQL_APP_PASSWORD" snapmirror_monitoring < config/mysql_schema.sql 2>/dev/null
         if [ $? -eq 0 ]; then
             echo "✓ Schema MySQL creado"
-            TABLE_COUNT=$(/usr/bin/mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SHOW TABLES;" 2>/dev/null | wc -l)
+            TABLE_COUNT=$(/usr/bin/mysql -u snapmirror_user -p"$MYSQL_APP_PASSWORD" snapmirror_monitoring -e "SHOW TABLES;" 2>/dev/null | wc -l)
             echo "✓ Base de datos inicializada con $((TABLE_COUNT - 1)) tablas"
         else
             echo "⚠ Error cargando schema"
@@ -181,7 +181,7 @@ fi
 
 # Actualizar config.yaml si es necesario
 if [ -f "config/config.yaml" ]; then
-    sed -i "s/password: change_me_in_production/password: SnapMirror123!/" config/config.yaml 2>/dev/null
+    sed -i "s/password: <change_me>/password: $MYSQL_APP_PASSWORD/" config/config.yaml 2>/dev/null
     echo "✓ Configuración actualizada"
 fi
 

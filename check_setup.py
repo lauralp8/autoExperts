@@ -218,7 +218,7 @@ def check_grafana():
             print(f"       Host: localhost:3306")
             print(f"       Database: snapmirror_monitoring")
             print(f"       User: snapmirror_user")
-            print(f"       Password: SnapMirror123!")
+            print(f"       Password: <set in config/config.yaml>")
             print(f"    3. Importar dashboard: grafana/snapmirror_dashboard.json")
             return True
         else:

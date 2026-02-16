@@ -3,9 +3,9 @@
 ## Credenciales por Defecto
 
 ```
-MySQL root:      NetApp123!
+MySQL root:      <set_via_env_var>
 MySQL app user:  snapmirror_user
-MySQL app pass:  SnapMirror123!
+MySQL app pass:  <set_via_env_var>
 Base de datos:   snapmirror_monitoring
 
 Grafana user:    admin
@@ -40,28 +40,28 @@ python3 check_setup.py
 
 ```bash
 # Conectar a MySQL como root
-mysql -u root -pNetApp123!
+mysql -u root -p
 
 # Conectar con usuario de aplicación
-mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring
+mysql -u snapmirror_user -p snapmirror_monitoring
 
 # Ver bases de datos
-mysql -u root -pNetApp123! -e "SHOW DATABASES;"
+mysql -u root -p -e "SHOW DATABASES;"
 
 # Ver tablas
-mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SHOW TABLES;"
+mysql -u snapmirror_user -p snapmirror_monitoring -e "SHOW TABLES;"
 
 # Cargar schema
-mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring < config/mysql_schema.sql
+mysql -u snapmirror_user -p snapmirror_monitoring < config/mysql_schema.sql
 
 # Resetear base de datos
-mysql -u root -pNetApp123! <<EOF
+mysql -u root -p <<EOF
 DROP DATABASE IF EXISTS snapmirror_monitoring;
 CREATE DATABASE snapmirror_monitoring;
 GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';
 FLUSH PRIVILEGES;
 EOF
-mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring < config/mysql_schema.sql
+mysql -u snapmirror_user -p snapmirror_monitoring < config/mysql_schema.sql
 ```
 
 ## Comandos Útiles Collector
@@ -108,13 +108,13 @@ sudo systemctl restart mysqld
 
 ```bash
 # Verificar que existe la BD
-mysql -u root -pNetApp123! -e "SHOW DATABASES;"
+mysql -u root -p -e "SHOW DATABASES;"
 
 # Cargar schema manualmente
-mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring < config/mysql_schema.sql
+mysql -u snapmirror_user -p snapmirror_monitoring < config/mysql_schema.sql
 
 # Verificar tablas
-mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SHOW TABLES;"
+mysql -u snapmirror_user -p snapmirror_monitoring -e "SHOW TABLES;"
 ```
 
 ### Grafana no conecta a MySQL
@@ -123,8 +123,8 @@ mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SHOW TABLES;
 # 1. Verificar MySQL corriendo
 sudo systemctl status mysqld
 
-# 2. Probar conexión
-mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SELECT 1;"
+# 2. Probar conexion
+mysql -u snapmirror_user -p snapmirror_monitoring -e "SELECT 1;"
 
 # 3. En Grafana datasource, usar:
 #    Host: 127.0.0.1:3306 (en vez de localhost:3306)
@@ -134,9 +134,9 @@ mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SELECT 1;"
 
 ```bash
 # Recrear usuario
-mysql -u root -pNetApp123! <<EOF
+mysql -u root -p <<EOF
 DROP USER IF EXISTS 'snapmirror_user'@'localhost';
-CREATE USER 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';
+CREATE USER 'snapmirror_user'@'localhost' IDENTIFIED BY '<your_password>';
 GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';
 FLUSH PRIVILEGES;
 EOF

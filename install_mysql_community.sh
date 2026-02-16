@@ -4,6 +4,10 @@
 
 set -e
 
+# Passwords via environment variables (no hardcoded values)
+MYSQL_ROOT_PASS="${MYSQL_ROOT_PASS:-change_me}"
+MYSQL_APP_PASS="${MYSQL_APP_PASS:-change_me}"
+
 echo "========================================="
 echo "  Instalación MySQL Community 8.0"
 echo "========================================="
@@ -134,7 +138,7 @@ if [ -z "$TEMP_PASS" ]; then
     
     mysql -u root <<EOF
 FLUSH PRIVILEGES;
-ALTER USER 'root'@'localhost' IDENTIFIED BY 'NetApp123!';
+ALTER USER 'root'@'localhost' IDENTIFIED BY '$MYSQL_ROOT_PASS';
 EOF
     
     kill $MYSQLD_PID 2>/dev/null || true
@@ -147,16 +151,16 @@ else
     # Cambiar password de root
     echo "→ Configurando password de root..."
     mysql -u root -p"${TEMP_PASS}" --connect-expired-password <<EOF
-ALTER USER 'root'@'localhost' IDENTIFIED BY 'NetApp123!';
+ALTER USER 'root'@'localhost' IDENTIFIED BY '$MYSQL_ROOT_PASS';
 FLUSH PRIVILEGES;
 EOF
 fi
 
-echo "  ✓ Password de root: NetApp123!"
+echo "  ✓ Password de root configurada"
 
 # Crear base de datos
 echo "→ Creando base de datos snapmirror_monitoring..."
-mysql -u root -pNetApp123! <<EOF
+mysql -u root -p"$MYSQL_ROOT_PASS" <<EOF
 CREATE DATABASE IF NOT EXISTS snapmirror_monitoring;
 EOF
 
@@ -164,33 +168,33 @@ echo "  ✓ Base de datos creada"
 
 # Crear usuario
 echo "→ Creando usuario snapmirror_user..."
-mysql -u root -pNetApp123! <<EOF
+mysql -u root -p"$MYSQL_ROOT_PASS" <<EOF
 DROP USER IF EXISTS 'snapmirror_user'@'localhost';
-CREATE USER 'snapmirror_user'@'localhost' IDENTIFIED BY 'SnapMirror123!';
+CREATE USER 'snapmirror_user'@'localhost' IDENTIFIED BY '$MYSQL_APP_PASS';
 GRANT ALL PRIVILEGES ON snapmirror_monitoring.* TO 'snapmirror_user'@'localhost';
 FLUSH PRIVILEGES;
 EOF
 
-echo "  ✓ Usuario creado: snapmirror_user / SnapMirror123!"
+echo "  ✓ Usuario creado: snapmirror_user"
 
 # Cargar schema
 if [ -f "config/mysql_schema.sql" ]; then
     echo "→ Cargando schema..."
-    mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring < config/mysql_schema.sql
+    mysql -u snapmirror_user -p"$MYSQL_APP_PASS" snapmirror_monitoring < config/mysql_schema.sql
     echo "  ✓ Schema cargado"
 else
     echo "  ⚠ Advertencia: config/mysql_schema.sql no encontrado"
-    echo "    Ejecuta manualmente: mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring < config/mysql_schema.sql"
+    echo "    Ejecuta manualmente: mysql -u snapmirror_user -p snapmirror_monitoring < config/mysql_schema.sql"
 fi
 
 # Verificar tablas
 echo ""
 echo "→ Verificando tablas creadas..."
-TABLES=$(mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SHOW TABLES;" -sN 2>/dev/null | wc -l)
+TABLES=$(mysql -u snapmirror_user -p"$MYSQL_APP_PASS" snapmirror_monitoring -e "SHOW TABLES;" -sN 2>/dev/null | wc -l)
 
 if [ "$TABLES" -ge 4 ]; then
     echo "  ✓ $TABLES tablas creadas correctamente"
-    mysql -u snapmirror_user -pSnapMirror123! snapmirror_monitoring -e "SHOW TABLES;"
+    mysql -u snapmirror_user -p"$MYSQL_APP_PASS" snapmirror_monitoring -e "SHOW TABLES;"
 else
     echo "  ⚠️  Se esperaban 4 tablas, se crearon $TABLES"
     echo "     (Esto es normal si config/mysql_schema.sql no existe aún)"
@@ -203,9 +207,7 @@ echo "========================================="
 echo ""
 echo "MySQL Community 8.0 instalado"
 echo ""
-echo "Credenciales:"
-echo "  Root:     root / NetApp123!"
-echo "  Usuario:  snapmirror_user / SnapMirror123!"
+echo "Credenciales: set via MYSQL_ROOT_PASS and MYSQL_APP_PASS env vars"
 echo "  Base de datos: snapmirror_monitoring"
 echo ""
 echo "Siguiente paso:"

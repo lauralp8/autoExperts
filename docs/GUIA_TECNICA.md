@@ -345,7 +345,7 @@ GET /api/snapmirror/relationships    # Relaciones SnapMirror
 ```python
 from src.ontap_client import ONTAPClient
 
-client = ONTAPClient('192.168.0.101', 'admin', 'Netapp1!', verify_ssl=False)
+client = ONTAPClient('192.168.0.101', 'admin', '<password>', verify_ssl=False)
 
 # Probar conexión
 if client.test_connection():
@@ -401,7 +401,7 @@ if client.test_connection():
 ```python
 from src.database import SnapMirrorDB
 
-db = SnapMirrorDB('localhost', 3306, 'snapmirror_user', 'SnapMirror123!', 'snapmirror_monitoring')
+db = SnapMirrorDB('localhost', 3306, 'snapmirror_user', '<password>', 'snapmirror_monitoring')
 db.connect()
 
 # Obtener estadísticas

@@ -5,7 +5,7 @@ database:
   host: localhost
   port: 3306
   user: snapmirror_user
-  password: SnapMirror123!
+  password: <change_me>
   database: snapmirror_monitoring
   
 # Collection Configuration

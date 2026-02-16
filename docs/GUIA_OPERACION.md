@@ -220,7 +220,7 @@ Name: SnapMirror DB
 Host: localhost:3306
 Database: snapmirror_monitoring
 User: snapmirror_user
-Password: SnapMirror123!
+Password: <change_me>
 
 Session timezone: (dejar vacío)
 Max open connections: 100
@@ -332,7 +332,7 @@ python remove_instance.py --ip "192.168.1.100" --delete
 |-----------|-------|-----------|
 | **Base de datos** | `snapmirror_monitoring` | `config/config.yaml` |
 | **Usuario MySQL** | `snapmirror_user` | `config/config.yaml` |
-| **Password MySQL** | `SnapMirror123!` | `config/config.yaml` |
+| **Password MySQL** | `<change_me>` | `config/config.yaml` |
 | **Host MySQL** | `localhost` | `config/config.yaml` |
 | **Puerto MySQL** | `3306` | `config/config.yaml` |
 | **Grafana URL** | `http://localhost:3000` | - |
