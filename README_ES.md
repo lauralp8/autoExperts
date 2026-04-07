@@ -1,10 +1,14 @@
-# SnapMirror Monitor - Guía Completa de Operación
+# SnapMirror Monitor — Guía Completa de Operación
+
+> **Rama `justmap`** — Adaptación para **Napp Console API**.  
+> Alcance: mapa geo de relaciones SnapMirror únicamente.  
+> Sin dashboard de capacidad. Sin auto-resize. Sin webhook.
 
 ## Índice
 1. [Arquitectura General](#1-arquitectura-general)
 2. [Qué hace cada componente](#2-qué-hace-cada-componente)
 3. [Cómo funciona run_collector.py](#3-cómo-funciona-run_collectorpy)
-4. [Cómo trae los datos de ONTAP](#4-cómo-trae-los-datos-de-ontap)
+4. [Cómo trae los datos de Napp Console](#4-cómo-trae-los-datos-de-napp-console)
 5. [Cómo procesa y guarda en la BBDD](#5-cómo-procesa-y-guarda-en-la-bbdd)
 6. [Cómo llegan los datos a Grafana](#6-cómo-llegan-los-datos-a-grafana)
 7. [Gestión de Instancias (Alta/Baja)](#7-gestión-de-instancias-altabaja)
@@ -22,25 +26,25 @@
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌─────────────────┐    ┌──────────────────┐    ┌────────┐    ┌─────────┐  │
-│  │ ontap_instances │ -> │ Python Collector │ -> │ MySQL  │ -> │ Grafana │  │
-│  │     (.csv)      │    │                  │    │        │    │         │  │
+│  │   instances     │ -> │ Python Collector │ -> │ MySQL  │ -> │ Grafana │  │
+│  │     (.csv)      │    │                  │    │        │    │  (maps) │  │
 │  └─────────────────┘    └────────┬─────────┘    └────────┘    └─────────┘  │
 │                                  │                                          │
 │                                  ▼                                          │
-│                         ┌────────────────┐                                  │
-│                         │ ONTAP REST API │                                  │
-│                         │ (1400+ clusters)│                                 │
-│                         └────────────────┘                                  │
+│                     ┌──────────────────────────┐                            │
+│                     │  Napp Console REST API   │                            │
+│                     │  (1400+ instancias)      │                            │
+│                     └──────────────────────────┘                            │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Ciclo de operación (cada 5 minutos):**
-1. El collector lee los clusters desde el CSV
-2. Consulta cada cluster vía REST API (con 0.2s de delay entre consultas para no saturar)
+1. El collector lee las instancias desde el CSV
+2. Consulta **Napp Console API** para obtener relaciones SnapMirror (con 0.2s de delay entre consultas para no saturar)
 3. Procesa los datos y calcula niveles de alerta
 4. Guarda en MySQL (estado actual + histórico)
-5. Grafana lee directamente de MySQL y pinta los dashboards
+5. Grafana lee directamente de MySQL y pinta el **mapa geo** y la tabla de relaciones
 
 ---
 
@@ -50,15 +54,17 @@
 |---------|---------|
 | `run_collector.py` | **Script principal** - Punto de entrada, parsea argumentos, arranca el collector |
 | `check_setup.py` | **Verificación** - Comprueba que todo esté configurado correctamente |
-| `remove_instance.py` | **Gestión de instancias** - Alta/baja de clusters ONTAP |
+| `remove_instance.py` | **Gestión de instancias** - Alta/baja de instancias |
 | `src/collector.py` | **Lógica principal** - Lee CSV, coordina recolección escalonada, calcula alertas |
-| `src/ontap_client.py` | **Cliente REST API** - Habla con ONTAP (`/api/snapmirror/relationships`) |
+| `src/ontap_client.py` | **⚠️ Pendiente de reemplazar** - Actualmente habla con ONTAP directamente. Debe sustituirse por `src/napp_client.py` |
+| `src/napp_client.py` | **🔧 Por crear** - Nuevo cliente REST para Napp Console API |
 | `src/database.py` | **Operaciones MySQL** - Insert, update, queries a la base de datos |
-| `src/mock_data.py` | **Datos simulados** - Generador para testing sin conectar a ONTAP real |
-| `config/config.yaml` | **Configuración** - BBDD, thresholds, intervalos |
-| `config/ontap_instances.csv` | **Inventario** - Lista de clusters a monitorizar |
-| `config/mysql_schema.sql` | **Schema SQL** - Estructura de tablas y vistas |
-| `grafana/*.json` | **Dashboards** - Configuración de paneles Grafana |
+| `src/mock_data.py` | **Datos simulados** - Generador para testing sin conectar a Napp Console real |
+| `config/config.yaml` | **Configuración** - BBDD, conexión Napp Console, thresholds, intervalos |
+| `config/ontap_instances.csv` | **Inventario** - Lista de instancias (añadir columna `napp_instance_id`) |
+| `config/mysql_schema.sql` | **Schema SQL** - Estructura de tablas y vistas (sin cambios) |
+| `grafana/snapmirror_dashboard.json` | **Mapa global** - Geo-map con todas las instancias |
+| `grafana/snapmirror_dashboard_per_relationship.json` | **Vista por relación** - Tabla y gráfico de lag |
 
 ---
 
@@ -111,15 +117,20 @@ python run_collector.py --log-level DEBUG --once
 
 ---
 
-## 4. Cómo trae los datos de ONTAP
+## 4. Cómo trae los datos de Napp Console
 
-### Endpoint REST API utilizado
+> ⚠️ **Pendiente de implementar**: el módulo `src/napp_client.py` todavía no existe.  
+> Consulta `REQUIREMENTS.md` para ver los endpoints y estructura de respuesta esperados que hay que confirmar con el equipo de Napp Console.
+
+### Endpoint REST API a utilizar (pendiente de confirmar)
 
 ```
-GET https://{cluster_ip}/api/snapmirror/relationships
+GET https://{napp-console-host}/api/v1/snapmirror/relationships?instance_id={id}
 ```
 
-### Campos que obtiene de cada relación
+Autenticación: Bearer token en cabecera `Authorization: Bearer <token>`
+
+### Campos que debe devolver cada relación
 
 | Campo | Descripción | Ejemplo |
 |-------|-------------|---------|
@@ -142,9 +153,9 @@ El código convierte el formato ISO 8601 a segundos:
 
 ### Recolección escalonada (Staggered)
 
-Para no saturar la red ni los clusters:
+Para no saturar la red ni Napp Console:
 - **Delay entre consultas**: 0.2 segundos
-- **1400 clusters × 0.2s = ~5 minutos** para completar un ciclo
+- **1400 instancias × 0.2s = ~5 minutos** para completar un ciclo
 - Esto coincide con el intervalo de recolección, evitando picos
 
 ---
@@ -368,7 +379,7 @@ vi config/ontap_instances.csv
 # 5. Test con datos mock
 python run_collector.py --once --mode mock
 
-# 6. Test con datos reales
+# 6. Test con Napp Console (requiere napp_client.py implementado)
 python run_collector.py --once --mode real
 
 # 7. Configurar servicio (Linux)
@@ -478,10 +489,10 @@ mysql -u snapmirror_user -p snapmirror_monitoring -e "SELECT * FROM v_snapmirror
 
 Para dudas o problemas:
 1. Revisar logs: `logs/collector.log`
-2. Verificar conectividad a clusters ONTAP
+2. Verificar conectividad a Napp Console API
 3. Verificar conexión a MySQL
-4. Comprobar credenciales en `config.yaml` y CSV
+4. Comprobar `napp_console.api_token` en `config.yaml`
 
 ---
 
-*Documento generado para SnapMirror Monitor (CORME)*
+*Documento generado para SnapMirror Monitor — rama `justmap` (Napp Console)*
