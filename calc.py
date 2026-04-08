@@ -3,7 +3,7 @@ Calculadora simple con operaciones básicas.
 """
 
 
-def suma(a, b):
+def SUMAR(a, b):
     """
     Suma dos números.
     
